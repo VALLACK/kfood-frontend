@@ -182,3 +182,12 @@
     border-right-color: var(--border);
   }
 }
+
+.scanButton {
+  transition: all 0.2s ease;
+}
+
+.scanButton:hover {
+  background-color: #B94A2C !important;
+  color: #fff !important;
+}
