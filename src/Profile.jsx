@@ -1,31 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 
 const Profile = () => {
   const navigate = useNavigate();
 
-  // 선택된 알레르기
+  // 선택 상태 (Supabase DB 연동)
   const [allergies, setAllergies] = useState([]);
-
-  // 종교
-  const [religion, setReligion] = useState(null);
-
-  // 식단
-  const [diet, setDiet] = useState(null);
+  const [religion, setReligion] = useState('');
+  const [diet, setDiet] = useState('');
+  const [loading, setLoading] = useState(true);
 
   // 기존 프로필 불러오기
   useEffect(() => {
     const loadProfile = async () => {
-      // 현재 로그인한 사용자 확인
       const { data: { user }, error: userError } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        console.error('로그인 사용자 확인 실패:', userError?.message);
+        console.error('Failed to get user:', userError?.message);
+        setLoading(false);
         return;
       }
 
-      // profiles 테이블에서 현재 사용자 프로필 조회
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('allergies, religious_diet, vegetarian_type')
@@ -33,53 +29,72 @@ const Profile = () => {
         .maybeSingle();
 
       if (profileError) {
-        console.error('프로필 불러오기 실패:', profileError.message);
+        console.error('Failed to load profile:', profileError.message);
+        setLoading(false);
         return;
       }
 
-      // 프로필이 있으면 화면에 표시
       if (profile) {
         setAllergies(profile.allergies || []);
         setReligion(profile.religious_diet || '');
         setDiet(profile.vegetarian_type || '');
       }
+      setLoading(false);
     };
 
     loadProfile();
   }, []);
 
-  const allergyOptions = ['땅콩', '갑각류', '유제품', '밀', '달걀', '견과류', '대두', '아황산류'];
+  // 시안 기준 옵션 리스트
+const allergyOptions = [
+    { value: 'peanuts', label: 'Peanuts' },
+    { value: 'shellfish', label: 'Shellfish' },
+    { value: 'eggs', label: 'Eggs' },
+    { value: 'dairy', label: 'Dairy' },
+    { value: 'gluten', label: 'Gluten' },
+    { value: 'soy', label: 'Soy' },
+    { value: 'sesame', label: 'Sesame' },
+    { value: 'tree_nuts', label: 'Tree Nuts' },
+  ];
 
   const religionOptions = [
-    { value: '', label: '해당 없음' },
-    { value: 'halal', label: '할랄 (Halal)' },
-    { value: 'kosher', label: '코셔 (Kosher)' },
+    { value: 'halal', label: 'Halal' },
+    { value: 'kosher', label: 'Kosher' },
   ];
 
   const dietOptions = [
-    { value: '', label: '해당 없음' },
-    { value: 'vegan', label: '비건 (Vegan)' },
-    { value: 'vegetarian', label: '베지테리언 (Vegetarian)' },
+    { value: 'vegetarian', label: 'Vegetarian' },
+    { value: 'vegan', label: 'Vegan' },
   ];
-  
-  // 알레르기 선택 / 해제
-  const handleAllergyToggle = (option) => {
+
+  // 알레르기 복수 선택 토글
+  const handleAllergyToggle = (e, value) => {
+    e.currentTarget.blur();
     setAllergies((prev) =>
-      prev.includes(option) ? prev.filter((item) => item !== option) : [...prev, option]
+      prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
     );
   };
 
-  // 설정 완료
+  // 단일 선택 해제 지원 (이미 선택된 것을 누르면 해제)
+  const handleReligionSelect = (e, value) => {
+    e.currentTarget.blur();
+    setReligion((prev) => (prev === value ? '' : value));
+  };
+
+  const handleDietSelect = (e, value) => {
+    e.currentTarget.blur();
+    setDiet((prev) => (prev === value ? '' : value));
+  };
+
+  // 프로필 저장
   const handleComplete = async () => {
-    // 현재 로그인한 사용자 확인
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      alert('로그인 정보를 확인할 수 없습니다.');
+      alert('Failed to verify user session.');
       return;
     }
 
-    // 프로필 정보 저장
     const { error } = await supabase.from('profiles').upsert(
       {
         user_id: user.id,
@@ -91,268 +106,396 @@ const Profile = () => {
     );
 
     if (error) {
-      alert('프로필 저장에 실패했습니다.');
+      alert('Failed to save profile.');
       return;
     }
 
-    // 저장 성공 → 홈
     navigate('/home');
   };
 
-  return (
-    <div style={pageStyle}>
-      <div style={profileBox}>
-        {/* 상단 타이틀 영역 */}
-        <div style={headerStyle}>
-          <div style={iconBadge}>🛡️</div>
-          <h1 style={titleStyle}>맞춤 식단 안전 설정</h1>
-          <p style={descriptionStyle}>
-            섭취하기 주의해야 하는 식품 정보를 선택해주세요.<br />
-            맞춤형 안전 가이드를 제공해 드립니다.
-          </p>
+  // 로그아웃 처리 함수
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Logout error:', error.message);
+      alert('Failed to log out.');
+      return;
+    }
+    navigate('/', { replace: true });
+  };
+
+  if (loading) {
+    return (
+      <div style={pageContainer}>
+        <div style={mobileCard}>
+          <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Loading...</div>
         </div>
+      </div>
+    );
+  }
 
-        {/* 1. 알레르기 */}
-        <section style={sectionStyle}>
-          <div style={sectionHeader}>
-            <span style={sectionTitleStyle}>알레르기</span>
-            <span style={badgeStyle}>복수 선택 가능</span>
+  return (
+    <div style={pageContainer}>
+      <style>{`
+        * {
+          -webkit-tap-highlight-color: transparent !important;
+        }
+        div:focus, button:focus {
+          outline: none !important;
+          box-shadow: none !important;
+        }
+      `}</style>
+
+      <div style={mobileCard}>
+        {/* 상단 헤더 */}
+        <header style={headerStyle}>
+          <button onClick={() => navigate(-1)} style={backButton}>
+            ‹
+          </button>
+          <h1 style={headerTitle}>Dietary Profile</h1>
+        </header>
+
+        <main style={mainContent}>
+          {/* 1. ALLERGIES */}
+          <section style={sectionStyle}>
+            <h2 style={sectionTitle}>ALLERGIES</h2>
+            <div style={cardBox}>
+              <div style={chipGridStyle}>
+                {allergyOptions.map((item) => {
+                  const isSelected = allergies.includes(item.value);
+                  return (
+                    <div
+                      key={item.value}
+                      onClick={(e) => handleAllergyToggle(e, item.value)}
+                      style={isSelected ? activeRedChipStyle : chipStyle}
+                    >
+                      {item.label}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* 2. RELIGIOUS DIET */}
+          <section style={sectionStyle}>
+            <h2 style={sectionTitle}>RELIGIOUS DIET</h2>
+            <div style={cardBox}>
+              <div style={chipRowStyle}>
+                {religionOptions.map((item) => {
+                  const isSelected = religion === item.value;
+                  return (
+                    <div
+                      key={item.value}
+                      onClick={(e) => handleReligionSelect(e, item.value)}
+                      style={isSelected ? activeBlueChipStyle : chipStyle}
+                    >
+                      {item.label}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* 3. DIET PREFERENCE */}
+          <section style={sectionStyle}>
+            <h2 style={sectionTitle}>DIET PREFERENCE</h2>
+            <div style={cardBox}>
+              <div style={chipRowStyle}>
+                {dietOptions.map((item) => {
+                  const isSelected = diet === item.value;
+                  return (
+                    <div
+                      key={item.value}
+                      onClick={(e) => handleDietSelect(e, item.value)}
+                      style={isSelected ? activeBlueChipStyle : chipStyle}
+                    >
+                      {item.label}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* 저장 & 로그아웃 버튼 영역 */}
+          <div style={actionButtonGroup}>
+            <div onClick={handleComplete} style={saveBtnStyle}>
+              Save Changes
+            </div>
+            <div onClick={handleLogout} style={logoutBtnStyle}>
+              Log Out
+            </div>
           </div>
+        </main>
 
-          <div style={chipGridStyle}>
-            {allergyOptions.map((option) => {
-              const isSelected = allergies.includes(option);
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => handleAllergyToggle(option)}
-                  style={{
-                    ...chipStyle,
-                    ...(isSelected ? activeChipStyle : {}),
-                  }}
-                >
-                  {isSelected && <span style={{ marginRight: 4 }}>✓</span>}
-                  {option}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* 2. 종교적 식단 */}
-        <section style={sectionStyle}>
-          <span style={sectionTitleStyle}>종교적 식단 제한</span>
-          <div style={optionGroupStyle}>
-            {religionOptions.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => setReligion(item.value)}
-                style={{
-                  ...optionBtnStyle,
-                  ...(religion === item.value ? activeOptionBtnStyle : {}),
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* 3. 채식/식단 유형 */}
-        <section style={sectionStyle}>
-          <span style={sectionTitleStyle}>채식 및 선호 식단</span>
-          <div style={optionGroupStyle}>
-            {dietOptions.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => setDiet(item.value)}
-                style={{
-                  ...optionBtnStyle,
-                  ...(diet === item.value ? activeOptionBtnStyle : {}),
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* 완료 버튼 */}
-        <button onClick={handleComplete} style={saveBtnStyle}>
-          설정 완료 →
-        </button>
+        {/* 하단 탭 네비게이션 */}
+        <BottomNav />
       </div>
     </div>
   );
 };
 
-/* ==================== 스타일 ==================== */
+/* 하단 탭 네비게이션 컴포넌트 */
+function BottomNav() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
 
-const pageStyle = {
+  return (
+    <nav style={bottomNavStyle}>
+      <button onClick={() => navigate('/home')} style={navItem(currentPath === '/home')}>
+        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+        <span>Home</span>
+      </button>
+
+      <button onClick={() => navigate('/history')} style={navItem(currentPath === '/history')}>
+        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        <span>History</span>
+      </button>
+
+      <button onClick={() => navigate('/chat')} style={navItem(currentPath === '/chat')}>
+        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        <span>Chat</span>
+      </button>
+
+      <button onClick={() => navigate('/profile')} style={navItem(currentPath === '/profile')}>
+        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+        <span>Profile</span>
+      </button>
+    </nav>
+  );
+}
+
+/* ==================== Inline Styles ==================== */
+
+const pageContainer = {
   minHeight: '100vh',
-  background: '#F9FAFB',
-  padding: '40px 16px',
   display: 'flex',
   justifyContent: 'center',
   alignItems: 'center',
+  background: '#333333',
+  padding: '16px',
   boxSizing: 'border-box',
+  userSelect: 'none',
 };
 
-const profileBox = {
+const mobileCard = {
   width: '100%',
-  maxWidth: 480,
-  background: '#FFFFFF',
-  borderRadius: 20,
-  padding: '40px 28px',
+  maxWidth: 390,
+  minHeight: 780,
+  background: '#F8FAFC',
+  borderRadius: 36,
+  display: 'flex',
+  flexDirection: 'column',
   boxSizing: 'border-box',
-  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.02)',
+  position: 'relative',
+  overflow: 'hidden',
+  boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
 };
 
 const headerStyle = {
-  textAlign: 'center',
-  marginBottom: 32,
-};
-
-const iconBadge = {
-  width: 56,
-  height: 56,
-  borderRadius: '50%',
-  background: '#FEF2F2',
-  fontSize: 28,
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'center',
-  margin: '0 auto 16px',
+  padding: '44px 20px 16px',
+  background: '#FFFFFF',
+  gap: 12,
 };
 
-const titleStyle = {
-  fontSize: 22,
+const backButton = {
+  background: 'none',
+  border: 'none',
+  fontSize: 28,
+  fontWeight: '300',
+  color: '#0F172A',
+  cursor: 'pointer',
+  padding: 0,
+  lineHeight: 1,
+};
+
+const headerTitle = {
+  fontSize: 20,
   fontWeight: 800,
-  color: '#111827',
-  margin: '0 0 8px 0',
-  letterSpacing: '-0.5px',
+  color: '#0F172A',
+  margin: 0,
+  letterSpacing: '-0.3px',
 };
 
-const descriptionStyle = {
-  fontSize: 14,
-  lineHeight: 1.5,
-  color: '#6B7280',
-  margin: 0,
+const mainContent = {
+  flex: 1,
+  padding: '20px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 20,
+  overflowY: 'auto',
 };
 
 const sectionStyle = {
-  marginBottom: 28,
-};
-
-const sectionHeader = {
   display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: 12,
+  flexDirection: 'column',
+  gap: 8,
 };
 
-const sectionTitleStyle = {
-  display: 'block',
-  fontSize: 15,
+const sectionTitle = {
+  fontSize: 12,
   fontWeight: 700,
-  color: '#374151',
-  marginBottom: 10,
+  color: '#475569',
+  margin: '0 0 4px 4px',
+  letterSpacing: '0.5px',
 };
 
-const badgeStyle = {
-  fontSize: 11,
-  color: '#9CA3AF',
-  fontWeight: 500,
+const cardBox = {
+  background: '#FFFFFF',
+  borderRadius: 20,
+  padding: '16px',
+  border: '1px solid #F1F5F9',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
 };
 
-/* 알레르기 태그(칩) 스타일 */
 const chipGridStyle = {
   display: 'flex',
   flexWrap: 'wrap',
-  gap: 8,
+  gap: 10,
+};
+
+const chipRowStyle = {
+  display: 'flex',
+  gap: 10,
+  flexWrap: 'wrap',
 };
 
 const chipStyle = {
-  appearance: 'none',
-  WebkitAppearance: 'none',
-  padding: '10px 16px',
-  borderRadius: 20,
-  border: '1px solid #E5E7EB',
-  background: '#F9FAFB',
-  color: '#4B5563',
+  padding: '10px 18px',
+  borderRadius: 24,
+  border: '1px solid #E2E8F0',
+  background: '#FFFFFF',
+  color: '#475569',
   fontSize: 14,
   fontWeight: 500,
   cursor: 'pointer',
-  transition: 'all 0.2s ease',
-  outline: 'none',
+  transition: 'all 0.15s ease',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   boxShadow: 'none',
+  outline: 'none',
 };
 
-const activeChipStyle = {
+/* 선택 시 스타일 */
+const activeRedChipStyle = {
+  padding: '10px 18px',
+  borderRadius: 24,
+  border: '2px solid #EF4444',
   background: '#FEF2F2',
-  border: '1px solid #DC2626',
   color: '#DC2626',
-  fontWeight: 700,
-  outline: 'none',
-  boxShadow: 'none',
-};
-
-/* 옵션 버튼 그룹 스타일 */
-const optionGroupStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
-  gap: 8,
-};
-
-const optionBtnStyle = {
-  appearance: 'none',
-  WebkitAppearance: 'none',
-  MozAppearance: 'none',
-
-  padding: '12px 8px',
-  borderRadius: 10,
-
-  border: '1px solid #E5E7EB',
-  outline: 'none',
-  boxShadow: 'none',
-
-  background: '#FFFFFF',
-  color: '#6B7280',
-  fontSize: 13,
-  fontWeight: 500,
+  fontSize: 14,
+  fontWeight: 600,
   cursor: 'pointer',
-  textAlign: 'center',
-
-  WebkitTapHighlightColor: 'transparent',
-  transition: 'all 0.2s ease',
-};
-
-const activeOptionBtnStyle = {
-  background: '#F3F4F6',
-  border: '1px solid #D1D5DB',
-  color: '#111827',
-  fontWeight: 700,
-  outline: 'none',
+  transition: 'all 0.15s ease',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   boxShadow: 'none',
+  outline: 'none',
 };
 
-/* 완료 버튼 스타일 */
+const activeBlueChipStyle = {
+  padding: '10px 18px',
+  borderRadius: 24,
+  border: '2px solid #1D5BB4',
+  background: '#EFF6FF',
+  color: '#1D5BB4',
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  boxShadow: 'none',
+  outline: 'none',
+};
+
+const actionButtonGroup = {
+  marginTop: 'auto',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  paddingTop: 12,
+};
+
 const saveBtnStyle = {
   width: '100%',
   height: 52,
-  marginTop: 12,
-  background: '#DC2626',
+  marginTop: 'auto',
+  background: '#1D5BB4',
   color: '#FFFFFF',
-  border: 'none',
-  borderRadius: 12,
+  borderRadius: 14,
   fontSize: 16,
   fontWeight: 700,
   cursor: 'pointer',
-  boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
-  transition: 'background-color 0.2s ease',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  boxShadow: '0 4px 14px rgba(29, 91, 180, 0.25)',
+  transition: 'all 0.15s ease',
+};
+
+const logoutBtnStyle = {
+  width: '100%',
+  height: 44,
+  background: '#F1F5F9',
+  color: '#64748B',
+  borderRadius: 14,
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'all 0.15s ease',
+};
+
+const bottomNavStyle = {
+  marginTop: 'auto',
+  height: 64,
+  background: '#FFFFFF',
+  borderTop: '1px solid #F1F5F9',
+  display: 'flex',
+  justifyContent: 'space-around',
+  alignItems: 'center',
+  padding: '0 8px',
+};
+
+const navItem = (isActive) => ({
+  background: 'none',
+  border: 'none',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 4,
+  color: isActive ? '#1D5BB4' : '#94A3B8',
+  fontSize: 11,
+  fontWeight: isActive ? 700 : 500,
+  cursor: 'pointer',
+  padding: '4px 8px',
+});
+
+const navIcon = {
+  width: 20,
+  height: 20,
 };
 
 export default Profile;
