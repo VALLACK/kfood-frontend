@@ -191,3 +191,7 @@
   background-color: #B94A2C !important;
   color: #fff !important;
 }
+
+@keyframes kfood-spin {
+  to { transform: rotate(360deg); }
+}
