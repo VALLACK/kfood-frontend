@@ -1,91 +1,191 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { supabase } from './supabaseClient';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-// 데모용 결과 데이터
+const LEVEL_ORDER = { SAFE: 0, CAUTION: 1, WARNING: 2 };
+
+const LEVEL_STYLE = {
+  SAFE:    { text: '#16A34A', bg: '#ECFDF5', border: '#BBF7D0' },
+  CAUTION: { text: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+  WARNING: { text: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
+};
+
+const KIND_INFO = {
+  allergy:          { title: 'Allergy Hazard Detected', preset: 'Allergy' },
+  religious:        { title: 'Dietary Restriction Detected', preset: 'Religious Diet' },
+  religious_verify: { title: 'Certification Needed', preset: 'Certification' },
+  diet:             { title: 'Diet Conflict Detected', preset: 'Diet' },
+};
+
+// 데모용 결과 데이터 (실제 /analyze 응답과 동일한 구조)
 const DEMO_RESULTS = [
   {
-    menu: '김치찌개',
-    ingredients: ['김치', '돼지고기', '두부', '대파', '고춧가루'],
-    hidden: ['액젓(생선)', '멸치육수'],
-    allergens: ['대두(두부)'],
-    contains_pork: true,
-    contains_alcohol: false,
-    risk: { level: 'WARNING', reasons: ['돼지고기 포함 (할랄 불가)', '액젓(생선) 포함'] },
+    menu: '해물파전',
+    menu_translated: 'Seafood Green Onion Pancake',
+    ingredients: [
+      { name: '밀가루', name_translated: 'Wheat flour', tags: ['wheat'], certainty: 'confirmed' },
+      { name: '대파', name_translated: 'Green Onion', tags: [], certainty: 'confirmed' },
+      { name: '오징어', name_translated: 'Squid', tags: ['squid'], certainty: 'confirmed' },
+      { name: '조개', name_translated: 'Clams', tags: ['shellfish'], certainty: 'confirmed' },
+      { name: '굴', name_translated: 'Oysters', tags: ['shellfish'], certainty: 'confirmed' },
+      { name: '달걀', name_translated: 'Egg', tags: ['egg'], certainty: 'confirmed' },
+      { name: '마늘', name_translated: 'Garlic', tags: [], certainty: 'confirmed' },
+    ],
+    risk: {
+      level: 'WARNING',
+      confirmed_reasons: [
+        { kind: 'allergy', tag: 'squid', label: 'Shellfish', ingredient: '오징어', certainty: 'confirmed', severity: '심각' },
+        { kind: 'allergy', tag: 'shellfish', label: 'Shellfish', ingredient: '조개', certainty: 'confirmed', severity: '심각' },
+        { kind: 'allergy', tag: 'shellfish', label: 'Shellfish', ingredient: '굴', certainty: 'confirmed', severity: '심각' },
+      ],
+      possible_reasons: [],
+      needs_confirmation: false,
+      staff_questions: [],
+    },
   },
   {
-    menu: '비빔밥',
-    ingredients: ['밥', '시금치', '당근', '고사리', '달걀', '고추장'],
-    hidden: ['참기름', '간장'],
-    allergens: ['달걀', '대두(간장)'],
-    contains_pork: false,
-    contains_alcohol: false,
-    risk: { level: 'CAUTION', reasons: ['달걀 포함 — 비건 불가', '숨겨진 재료: 간장(대두)'] },
+    menu: '순두부찌개',
+    menu_translated: 'Soft Tofu Stew',
+    ingredients: [
+      { name: '순두부', name_translated: 'Soft Tofu', tags: ['soy'], certainty: 'confirmed' },
+      { name: '액젓', name_translated: 'Fish Sauce', tags: ['fish'], certainty: 'possible' },
+    ],
+    risk: {
+      level: 'CAUTION',
+      confirmed_reasons: [],
+      possible_reasons: [{ kind: 'allergy', tag: 'fish', label: 'Fish', ingredient: '액젓', certainty: 'possible', severity: '경미' }],
+      needs_confirmation: true,
+      staff_questions: [{ kind: 'contains', ingredient: '액젓', tag: 'fish', tags: ['fish'], options: [], ko: '순두부찌개에 액젓이 들어가나요?', translated: 'Does the Soft Tofu Stew contain fish sauce?' }],
+    },
   },
   {
-    menu: '잡채',
-    ingredients: ['당면', '시금치', '당근', '양파', '간장', '참기름'],
-    hidden: ['간장(대두)'],
-    allergens: ['대두(간장)'],
-    contains_pork: false,
-    contains_alcohol: false,
-    risk: { level: 'SAFE', reasons: [] },
+    menu: '돌솥비빔밥',
+    menu_translated: 'Hot Stone Pot Bibimbap',
+    ingredients: [
+      { name: '쌀밥', name_translated: 'Rice', tags: [], certainty: 'confirmed' },
+      { name: '나물', name_translated: 'Seasoned Vegetables', tags: [], certainty: 'confirmed' },
+    ],
+    risk: { level: 'SAFE', confirmed_reasons: [], possible_reasons: [], needs_confirmation: false, staff_questions: [] },
   },
 ];
 
-const LEVEL_CONFIG = {
-  SAFE:    { bg: '#E8F5E9', border: '#4A7C59', color: '#2E6B43', icon: '✅', label: '섭취 가능',  labelKo: 'SAFE' },
-  CAUTION: { bg: '#FFF8E1', border: '#E8A838', color: '#7a5a00', icon: '⚠️', label: '확인 필요',  labelKo: 'CAUTION' },
-  WARNING: { bg: '#FFEBEE', border: '#B94A2C', color: '#7a1a1a', icon: '🚫', label: '섭취 불가',  labelKo: 'WARNING' },
-};
+function groupReasons(reasons) {
+  // 같은 표시 라벨(예: shrimp·crab 태그가 둘 다 "Shellfish")은 한 박스로 합침
+  const map = new Map();
+  for (const r of reasons) {
+    if (!r.label) continue;
+    const key = `${r.kind}:${r.label}`;
+    if (!map.has(key)) {
+      map.set(key, { kind: r.kind, label: r.label, certainty: r.certainty, ingredients: [] });
+    }
+    const g = map.get(key);
+    if (!g.ingredients.includes(r.ingredient)) g.ingredients.push(r.ingredient);
+    if (r.certainty === 'confirmed') g.certainty = 'confirmed';
+  }
+  return [...map.values()];
+}
+
+function renderBreakdown(ingredients, groups) {
+  const tagByName = new Map();
+  groups.forEach((g) => g.ingredients.forEach((name) => tagByName.set(name, g)));
+
+  const nodes = [];
+  let i = 0;
+  while (i < ingredients.length) {
+    const ing = ingredients[i];
+    const name = ing.name_translated || ing.name;
+    const group = tagByName.get(ing.name);
+    if (group) {
+      const runNames = [name];
+      let j = i + 1;
+      while (j < ingredients.length && tagByName.get(ingredients[j].name) === group) {
+        runNames.push(ingredients[j].name_translated || ingredients[j].name);
+        j++;
+      }
+      nodes.push(
+        <span key={i} style={{ color: LEVEL_STYLE.WARNING.text, fontWeight: 700 }}>
+          {runNames.join(', ')} ({group.label})
+        </span>
+      );
+      i = j;
+    } else {
+      nodes.push(<span key={i}>{name}</span>);
+      i++;
+    }
+  }
+  return nodes.reduce((acc, node, idx) => {
+    if (idx > 0) acc.push(', ');
+    acc.push(node);
+    return acc;
+  }, []);
+}
 
 function ResultCard({ item }) {
-  const [open, setOpen] = useState(false);
-  const cfg = LEVEL_CONFIG[item.risk.level];
+  const risk = item.risk || {};
+  const level = risk.level || 'SAFE';
+  const style = LEVEL_STYLE[level];
+  const [open, setOpen] = useState(level === 'WARNING');
+
+  const ingredients = item.ingredients || [];
+  const groups = groupReasons([...(risk.confirmed_reasons || []), ...(risk.possible_reasons || [])]);
+  const staffQuestions = risk.staff_questions || [];
+  const displayName = item.menu_translated || item.menu;
+
   return (
-    <div style={{ ...cardBase, borderColor: cfg.border, background: cfg.bg }}>
-      {/* 헤더 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-        <span style={{ fontSize: 28 }}>{cfg.icon}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 900, fontSize: 17, color: '#1A1A1A' }}>{item.menu}</div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: cfg.color, letterSpacing: 1 }}>{cfg.labelKo} — {cfg.label}</div>
+    <div style={{ ...cardBase, ...(level === 'WARNING' ? { border: `2px solid ${style.border}` } : {}) }}>
+      <button style={cardHeaderBtn} onClick={() => setOpen((v) => !v)}>
+        <div style={{ textAlign: 'left' }}>
+          <div style={cardMenuName}>{item.menu}</div>
+          {displayName !== item.menu && <div style={cardMenuTranslated}>{displayName}</div>}
         </div>
-        <button onClick={() => setOpen(v => !v)} style={toggleBtn}>{open ? '접기' : '상세'}</button>
-      </div>
-
-      {/* 위험 이유 */}
-      {item.risk.reasons.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          {item.risk.reasons.map((r, i) => (
-            <div key={i} style={{ fontSize: 12, color: cfg.color, padding: '2px 0' }}>• {r}</div>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ ...levelPill, color: style.text, background: style.bg, border: `1px solid ${style.border}` }}>
+            {level}
+          </span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#94A3B8" strokeWidth="2.5"
+               style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
         </div>
-      )}
+      </button>
 
-      {/* 상세 펼치기 */}
       {open && (
-        <div style={{ borderTop: `1px solid ${cfg.border}`, marginTop: 8, paddingTop: 12 }}>
-          <div style={detailRow}>
-            <span style={detailLabel}>주요 성분</span>
-            <span style={detailVal}>{item.ingredients.join(', ')}</span>
-          </div>
-          {item.hidden.length > 0 && (
-            <div style={detailRow}>
-              <span style={{ ...detailLabel, color: '#E8A838' }}>숨겨진 재료</span>
-              <span style={detailVal}>{item.hidden.join(', ')}</span>
+        <div style={cardBody}>
+          {groups.map((g, i) => {
+            const info = KIND_INFO[g.kind] || KIND_INFO.allergy;
+            return (
+              <div key={i} style={{ ...alertBox, background: style.bg, border: `1px solid ${style.border}` }}>
+                <div style={{ ...alertTitle, color: style.text }}>
+                  <span style={{ marginRight: 6 }}>⚠️</span>{info.title}
+                </div>
+                <div style={alertDesc}>
+                  Contains <strong>{g.label}</strong> ({g.ingredients.join(', ')}) which triggers your {g.label} {info.preset} preset.
+                </div>
+              </div>
+            );
+          })}
+
+          {ingredients.length > 0 && (
+            <div style={{ marginTop: groups.length > 0 ? 12 : 0 }}>
+              <div style={breakdownLabel}>INGREDIENT BREAKDOWN</div>
+              <div style={breakdownText}>{renderBreakdown(ingredients, groups)}.</div>
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-            <span style={tagBadge(item.contains_pork ? '#B94A2C' : '#4A7C59')}>
-              {item.contains_pork ? '🐷 돼지고기 포함' : '🐷 돼지고기 없음'}
-            </span>
-            <span style={tagBadge(item.contains_alcohol ? '#B94A2C' : '#4A7C59')}>
-              {item.contains_alcohol ? '🍺 알코올 포함' : '🍺 알코올 없음'}
-            </span>
-          </div>
+
+          {staffQuestions.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={breakdownLabel}>ASK THE STAFF</div>
+              {staffQuestions.map((q, i) => (
+                <div key={i} style={{ marginBottom: 6 }}>
+                  <div style={{ fontSize: 13, color: '#0F172A' }}>{q.translated}</div>
+                  <div style={{ fontSize: 12, color: '#94A3B8' }}>{q.ko}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -98,11 +198,9 @@ export default function ResultPage() {
   const [results, setResults]   = useState([]);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
-  const [profileId, setProfileId] = useState(
-  localStorage.getItem('profile_id') || ''
-);
 
   const isDemo = location.state?.demo;
+  const menus = location.state?.menus;
   const ocrText = location.state?.ocrText;
 
   useEffect(() => {
@@ -110,104 +208,341 @@ export default function ResultPage() {
       setResults(DEMO_RESULTS);
       return;
     }
-    if (ocrText) {
-      fetchAnalysis(ocrText);
+    // menus가 있으면 우선 사용 — /ocr이 이미 가격·상호명을 뺀 메뉴명만 정제해서 준 목록이라
+    // ocr_text를 그대로 보내 서버가 줄 단위로 재파싱(가격까지 메뉴명에 섞임)하는 것보다 정확함
+    if (menus && menus.length > 0) {
+      fetchAnalysis({ menus });
+    } else if (ocrText) {
+      fetchAnalysis({ ocr_text: ocrText });
     }
   }, []);
 
-  const fetchAnalysis = async (text) => {
-  setLoading(true);
-  setError('');
-  try {
-    const res = await axios.post(`${API_URL}/analyze`, {
-      ocr_text: text,
-      profile_id: localStorage.getItem('profile_id') || null,
-    }, { timeout: 30000 });
-    setResults(res.data.results || []);
-  } catch (err) {
-    if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
-      setError('백엔드 서버에 연결할 수 없어요. 서버가 실행 중인지 확인해주세요. (uvicorn main:app --reload)');
-    } else if (err.code === 'ECONNABORTED') {
-      setError('분석 시간이 너무 오래 걸려요. 잠시 후 다시 시도해주세요.');
-    } else if (err.response?.status === 500) {
-      setError('서버 내부 오류가 발생했어요. 백엔드 터미널에서 에러를 확인해주세요.');
-    } else if (err.response?.status === 429) {
-      setError('AI API 요청 한도를 초과했어요. 잠시 후 다시 시도해주세요.');
-    } else {
-      setError(`오류가 발생했어요: ${err.message}`);
-    }
-    setResults(DEMO_RESULTS);
-  } finally {
-    setLoading(false);
-  }
-};
+  const fetchAnalysis = async (payload) => {
+    setLoading(true);
+    setError('');
+    try {
+      // 로그인 상태면 Supabase 토큰을 실어 보내서 서버가 DB에 저장된 프로필(알레르기 등)을 적용하게 함
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
+      const res = await axios.post(`${API_URL}/analyze`, payload, { timeout: 30000, headers });
+      setResults(res.data.results || []);
+    } catch (err) {
+      if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
+        setError('백엔드 서버에 연결할 수 없어요. 서버가 실행 중인지 확인해주세요.');
+      } else if (err.code === 'ECONNABORTED') {
+        setError('분석 시간이 너무 오래 걸려요. 잠시 후 다시 시도해주세요.');
+      } else if (err.response?.status === 500) {
+        setError('서버 내부 오류가 발생했어요. 백엔드 터미널에서 에러를 확인해주세요.');
+      } else if (err.response?.status === 429) {
+        setError('AI API 요청 한도를 초과했어요. 잠시 후 다시 시도해주세요.');
+      } else {
+        setError(`오류가 발생했어요: ${err.message}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sorted = [...results].sort((a, b) => (LEVEL_ORDER[b.risk?.level] ?? 0) - (LEVEL_ORDER[a.risk?.level] ?? 0));
   const summary = {
-    WARNING: results.filter(r => r.risk.level === 'WARNING').length,
-    CAUTION: results.filter(r => r.risk.level === 'CAUTION').length,
-    SAFE:    results.filter(r => r.risk.level === 'SAFE').length,
+    WARNING: results.filter((r) => r.risk?.level === 'WARNING').length,
+    CAUTION: results.filter((r) => r.risk?.level === 'CAUTION').length,
+    SAFE:    results.filter((r) => r.risk?.level === 'SAFE').length,
   };
 
   return (
-    <div style={pageStyle}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button onClick={() => navigate('/scan')} style={backBtn}>← 다시 스캔</button>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>
-          {isDemo ? '📊 데모 결과' : '📊 분석 결과'}
-        </h2>
-      </div>
-
-      {/* 요약 배지 */}
-      {results.length > 0 && (
-        <div style={summaryRow}>
-          {Object.entries(summary).map(([level, count]) => {
-            const cfg = LEVEL_CONFIG[level];
-            return (
-              <div key={level} style={{ ...summaryBadge, background: cfg.bg, borderColor: cfg.border, color: cfg.color }}>
-                {cfg.icon} {level} {count}개
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {loading && <div style={loadingBox}>🧠 AI가 성분을 분석 중이에요...</div>}
-      {error   && <div style={errorBox}>⚠️ {error}</div>}
-
-      {results.length > 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {results.map((item, i) => <ResultCard key={i} item={item} />)}
-        </div>
-      ) : (
-        !loading && (
-          <div style={emptyBox}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>결과가 없어요</div>
-            <div style={{ fontSize: 13, color: '#888' }}>스캔 페이지로 돌아가서 메뉴판을 업로드해주세요.</div>
+    <div style={pageOuter}>
+      <div style={mobileCard}>
+        <header style={headerBar}>
+          <button onClick={() => navigate(-1)} style={backBtn} aria-label="뒤로">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0F172A" strokeWidth="2.5">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <div>
+            <div style={headerTitle}>Analysis Results</div>
+            {results.length > 0 && (
+              <div style={headerSubtitle}>{results.length} menu {results.length === 1 ? 'item' : 'items'} detected</div>
+            )}
           </div>
-        )
-      )}
+        </header>
 
-      {isDemo && (
-        <div style={demoBanner}>
-          ℹ️ 데모 화면이에요. 실제 백엔드 서버를 켜고 스캔하면 실제 분석 결과가 나와요.
+        <div style={contentScroll}>
+          {results.length > 0 && (
+            <div style={summaryRow}>
+              {(['SAFE', 'CAUTION', 'WARNING']).map((level) => {
+                const s = LEVEL_STYLE[level];
+                return (
+                  <div key={level} style={{ ...summaryChip, background: s.bg, border: `1px solid ${s.border}` }}>
+                    <span style={{ ...summaryDot, background: s.text }} />
+                    <span style={{ fontWeight: 800, color: s.text }}>{summary[level]}</span>
+                    <span style={{ color: s.text, fontWeight: 600 }}>{level}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {loading && <div style={loadingBox}>🧠 AI가 성분을 분석 중이에요...</div>}
+          {error   && <div style={errorBox}>⚠️ {error}</div>}
+
+          {sorted.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {sorted.map((item, i) => <ResultCard key={i} item={item} />)}
+            </div>
+          ) : (
+            !loading && (
+              <div style={emptyBox}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+                <div style={{ fontWeight: 700, marginBottom: 6, color: '#0F172A' }}>결과가 없어요</div>
+                <div style={{ fontSize: 13, color: '#94A3B8' }}>스캔 페이지로 돌아가서 메뉴판을 업로드해주세요.</div>
+              </div>
+            )
+          )}
         </div>
-      )}
+
+        <BottomNav />
+      </div>
     </div>
   );
 }
 
-const pageStyle   = { maxWidth: 520, margin: '0 auto', padding: '32px 20px' };
-const backBtn     = { background: 'none', border: '1px solid #E0D8CC', borderRadius: 4, padding: '6px 14px', cursor: 'pointer', fontSize: 13, color: '#666' };
-const summaryRow  = { display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' };
-const summaryBadge = { padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, border: '1.5px solid' };
-const loadingBox  = { textAlign: 'center', padding: '40px 20px', fontSize: 15, color: '#666' };
-const errorBox = {background: '#FFF0F0', border: '1.5px solid #B94A2C', borderRadius: 8, padding: '14px 18px', fontSize: 13, color: '#B94A2C', marginBottom: 16, lineHeight: 1.6, display: 'flex', alignItems: 'flex-start', gap: 8};
-const emptyBox    = { textAlign: 'center', padding: '60px 20px', color: '#888' };
-const demoBanner  = { marginTop: 24, background: '#EEF4FF', border: '1px solid #3B6EA8', borderRadius: 4, padding: '12px 16px', fontSize: 12, color: '#1a3a6b' };
-const cardBase    = { border: '2px solid', borderRadius: 10, padding: '16px', transition: 'box-shadow .2s' };
-const toggleBtn   = { background: 'none', border: '1px solid currentColor', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontSize: 11, fontWeight: 700, opacity: 0.7 };
-const detailRow   = { display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' };
-const detailLabel = { fontSize: 11, fontWeight: 700, letterSpacing: 1, color: '#888', minWidth: 70, marginTop: 1 };
-const detailVal   = { fontSize: 12, color: '#333', lineHeight: 1.6 };
-const tagBadge    = (color) => ({ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: color + '22', color, fontWeight: 700, border: `1px solid ${color}44` });
+function BottomNav() {
+  const navigate = useNavigate();
+  return (
+    <nav style={bottomNavStyle}>
+      <button onClick={() => navigate('/home')} style={navItem(false)}>
+        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+        <span>Home</span>
+      </button>
+      <button onClick={() => navigate('/history')} style={navItem(true)}>
+        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        <span>History</span>
+      </button>
+      <button onClick={() => navigate('/chat')} style={navItem(false)}>
+        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        <span>Chat</span>
+      </button>
+      <button onClick={() => navigate('/profile')} style={navItem(false)}>
+        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+        <span>Profile</span>
+      </button>
+    </nav>
+  );
+}
+
+/* ==================== Inline Styles ==================== */
+
+const pageOuter = {
+  minHeight: '100vh',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  background: '#333333',
+  padding: '16px',
+  boxSizing: 'border-box',
+};
+
+const mobileCard = {
+  width: '100%',
+  maxWidth: 390,
+  minHeight: 780,
+  maxHeight: 850,
+  background: '#F8FAFC',
+  borderRadius: 36,
+  display: 'flex',
+  flexDirection: 'column',
+  boxSizing: 'border-box',
+  position: 'relative',
+  overflow: 'hidden',
+  boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+};
+
+const headerBar = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 14,
+  padding: '48px 20px 16px',
+  background: '#FFFFFF',
+  borderBottom: '1px solid #F1F5F9',
+};
+
+const backBtn = {
+  width: 32,
+  height: 32,
+  borderRadius: '50%',
+  border: 'none',
+  background: '#F1F5F9',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  flexShrink: 0,
+};
+
+const headerTitle = {
+  fontSize: 19,
+  fontWeight: 800,
+  color: '#0F172A',
+  letterSpacing: '-0.3px',
+};
+
+const headerSubtitle = {
+  fontSize: 12,
+  color: '#94A3B8',
+  marginTop: 2,
+};
+
+const contentScroll = {
+  flex: 1,
+  overflowY: 'auto',
+  padding: '16px 20px 20px',
+};
+
+const summaryRow = {
+  display: 'flex',
+  gap: 8,
+  marginBottom: 16,
+};
+
+const summaryChip = {
+  flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+  borderRadius: 20,
+  padding: '8px 6px',
+  fontSize: 12,
+};
+
+const summaryDot = {
+  width: 8,
+  height: 8,
+  borderRadius: '50%',
+  display: 'inline-block',
+};
+
+const loadingBox = { textAlign: 'center', padding: '40px 20px', fontSize: 14, color: '#64748B' };
+const errorBox = { background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#DC2626', marginBottom: 14, lineHeight: 1.5 };
+const emptyBox = { textAlign: 'center', padding: '60px 20px' };
+
+const cardBase = {
+  background: '#FFFFFF',
+  borderRadius: 16,
+  border: '1px solid #F1F5F9',
+  overflow: 'hidden',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+};
+
+const cardHeaderBtn = {
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '16px 16px',
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  textAlign: 'left',
+};
+
+const cardMenuName = {
+  fontSize: 16,
+  fontWeight: 800,
+  color: '#0F172A',
+};
+
+const cardMenuTranslated = {
+  fontSize: 12,
+  color: '#64748B',
+  marginTop: 2,
+};
+
+const levelPill = {
+  fontSize: 11,
+  fontWeight: 800,
+  padding: '4px 10px',
+  borderRadius: 20,
+  letterSpacing: '0.3px',
+};
+
+const cardBody = {
+  padding: '0 16px 16px',
+};
+
+const alertBox = {
+  borderRadius: 12,
+  padding: '12px 14px',
+  marginBottom: 4,
+};
+
+const alertTitle = {
+  fontSize: 13,
+  fontWeight: 800,
+  marginBottom: 4,
+  display: 'flex',
+  alignItems: 'center',
+};
+
+const alertDesc = {
+  fontSize: 13,
+  color: '#334155',
+  lineHeight: 1.5,
+};
+
+const breakdownLabel = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: '0.5px',
+  color: '#94A3B8',
+  marginBottom: 6,
+};
+
+const breakdownText = {
+  fontSize: 13,
+  color: '#334155',
+  lineHeight: 1.6,
+};
+
+const bottomNavStyle = {
+  height: 64,
+  background: '#FFFFFF',
+  borderTop: '1px solid #F1F5F9',
+  display: 'flex',
+  justifyContent: 'space-around',
+  alignItems: 'center',
+  padding: '0 8px',
+  flexShrink: 0,
+};
+
+const navItem = (isActive) => ({
+  background: 'none',
+  border: 'none',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 4,
+  color: isActive ? '#1D5BB4' : '#94A3B8',
+  fontSize: 11,
+  fontWeight: isActive ? 700 : 500,
+  cursor: 'pointer',
+  padding: '4px 8px',
+});
+
+const navIcon = {
+  width: 20,
+  height: 20,
+};

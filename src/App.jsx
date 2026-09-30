@@ -5,6 +5,7 @@ import Login from './Login';
 import Profile from './Profile';
 import ScanPage from './ScanPage';
 import ResultPage from './ResultPage';
+import ChatPage from './ChatPage';
 import './App.css';
 
 function Home() {
@@ -255,6 +256,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/scan" element={<ScanPage />} />
         <Route path="/result" element={<ResultPage />} />
+        <Route path="/chat" element={<ChatPage />} />
       </Routes>
     </Router>
   );
