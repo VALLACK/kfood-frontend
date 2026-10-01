@@ -13,125 +13,99 @@ const LEVEL_STYLE = {
   WARNING: { text: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
 };
 
-const KIND_INFO = {
-  allergy:          { title: 'Allergy Hazard Detected', preset: 'Allergy' },
-  religious:        { title: 'Dietary Restriction Detected', preset: 'Religious Diet' },
-  religious_verify: { title: 'Certification Needed', preset: 'Certification' },
-  diet:             { title: 'Diet Conflict Detected', preset: 'Diet' },
-};
-
-// 데모용 결과 데이터 (실제 /analyze 응답과 동일한 구조)
-const DEMO_RESULTS = [
-  {
-    menu: '해물파전',
-    menu_translated: 'Seafood Green Onion Pancake',
-    ingredients: [
-      { name: '밀가루', name_translated: 'Wheat flour', tags: ['wheat'], certainty: 'confirmed' },
-      { name: '대파', name_translated: 'Green Onion', tags: [], certainty: 'confirmed' },
-      { name: '오징어', name_translated: 'Squid', tags: ['squid'], certainty: 'confirmed' },
-      { name: '조개', name_translated: 'Clams', tags: ['shellfish'], certainty: 'confirmed' },
-      { name: '굴', name_translated: 'Oysters', tags: ['shellfish'], certainty: 'confirmed' },
-      { name: '달걀', name_translated: 'Egg', tags: ['egg'], certainty: 'confirmed' },
-      { name: '마늘', name_translated: 'Garlic', tags: [], certainty: 'confirmed' },
-    ],
-    risk: {
-      level: 'WARNING',
-      confirmed_reasons: [
-        { kind: 'allergy', tag: 'squid', label: 'Shellfish', ingredient: '오징어', certainty: 'confirmed', severity: '심각' },
-        { kind: 'allergy', tag: 'shellfish', label: 'Shellfish', ingredient: '조개', certainty: 'confirmed', severity: '심각' },
-        { kind: 'allergy', tag: 'shellfish', label: 'Shellfish', ingredient: '굴', certainty: 'confirmed', severity: '심각' },
-      ],
-      possible_reasons: [],
-      needs_confirmation: false,
-      staff_questions: [],
-    },
-  },
-  {
-    menu: '순두부찌개',
-    menu_translated: 'Soft Tofu Stew',
-    ingredients: [
-      { name: '순두부', name_translated: 'Soft Tofu', tags: ['soy'], certainty: 'confirmed' },
-      { name: '액젓', name_translated: 'Fish Sauce', tags: ['fish'], certainty: 'possible' },
-    ],
-    risk: {
-      level: 'CAUTION',
-      confirmed_reasons: [],
-      possible_reasons: [{ kind: 'allergy', tag: 'fish', label: 'Fish', ingredient: '액젓', certainty: 'possible', severity: '경미' }],
-      needs_confirmation: true,
-      staff_questions: [{ kind: 'contains', ingredient: '액젓', tag: 'fish', tags: ['fish'], options: [], ko: '순두부찌개에 액젓이 들어가나요?', translated: 'Does the Soft Tofu Stew contain fish sauce?' }],
-    },
-  },
-  {
-    menu: '돌솥비빔밥',
-    menu_translated: 'Hot Stone Pot Bibimbap',
-    ingredients: [
-      { name: '쌀밥', name_translated: 'Rice', tags: [], certainty: 'confirmed' },
-      { name: '나물', name_translated: 'Seasoned Vegetables', tags: [], certainty: 'confirmed' },
-    ],
-    risk: { level: 'SAFE', confirmed_reasons: [], possible_reasons: [], needs_confirmation: false, staff_questions: [] },
-  },
-];
-
-function groupReasons(reasons) {
-  // 같은 표시 라벨(예: shrimp·crab 태그가 둘 다 "Shellfish")은 한 박스로 합침
-  const map = new Map();
-  for (const r of reasons) {
-    if (!r.label) continue;
-    const key = `${r.kind}:${r.label}`;
-    if (!map.has(key)) {
-      map.set(key, { kind: r.kind, label: r.label, certainty: r.certainty, ingredients: [] });
-    }
-    const g = map.get(key);
-    if (!g.ingredients.includes(r.ingredient)) g.ingredients.push(r.ingredient);
-    if (r.certainty === 'confirmed') g.certainty = 'confirmed';
-  }
-  return [...map.values()];
+// 로그인 토큰을 헤더에 실어 보낸다 (없으면 비로그인 분석)
+async function authHeader() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
-function renderBreakdown(ingredients, groups) {
-  const tagByName = new Map();
-  groups.forEach((g) => g.ingredients.forEach((name) => tagByName.set(name, g)));
+// 직원에게 들려줄 한국어 질문 (브라우저 내장 TTS)
+function speakKo(text) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ko-KR';
+  u.rate = 0.9;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
 
-  const nodes = [];
-  let i = 0;
-  while (i < ingredients.length) {
-    const ing = ingredients[i];
-    const name = ing.name_translated || ing.name;
-    const group = tagByName.get(ing.name);
-    if (group) {
-      const runNames = [name];
-      let j = i + 1;
-      while (j < ingredients.length && tagByName.get(ingredients[j].name) === group) {
-        runNames.push(ingredients[j].name_translated || ingredients[j].name);
-        j++;
-      }
-      nodes.push(
-        <span key={i} style={{ color: LEVEL_STYLE.WARNING.text, fontWeight: 700 }}>
-          {runNames.join(', ')} ({group.label})
-        </span>
+/* ── 직원 확인 질문 카드 ── */
+function StaffQuestion({ item, question, onUpdated }) {
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState('');
+
+  const answer = async (value) => {
+    setSending(true);
+    try {
+      const res = await axios.post(
+        `${API_URL}/qna/confirm`,
+        {
+          menu_result: item,
+          question: {
+            kind: question.kind,
+            ingredient: question.ingredient,
+            tag: question.tag,
+            options: question.options || [],
+          },
+          staff_answer: value,
+          input_type: 'text',
+        },
+        { headers: { ...(await authHeader()) }, timeout: 60000 }
       );
-      i = j;
-    } else {
-      nodes.push(<span key={i}>{name}</span>);
-      i++;
+      setDone(res.data.result?.risk?.level || '');
+      onUpdated(res.data.result);
+    } catch (e) {
+      alert('답변 반영에 실패했어요: ' + e.message);
+    } finally {
+      setSending(false);
     }
-  }
-  return nodes.reduce((acc, node, idx) => {
-    if (idx > 0) acc.push(', ');
-    acc.push(node);
-    return acc;
-  }, []);
+  };
+
+  const isVariant = question.kind === 'variant';
+
+  return (
+    <div style={qBox}>
+      <div style={{ fontSize: 11, color: '#D97706', fontWeight: 700, marginBottom: 4 }}>직원에게 보여주세요</div>
+      <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', lineHeight: 1.4 }}>{question.ko}</div>
+      <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{question.translated}</div>
+
+      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+        <button onClick={() => speakKo(question.ko)} style={ttsBtn}>🔊 한국어로 읽어주기</button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+        {isVariant
+          ? (question.options || []).map((opt) => (
+              <button key={opt} disabled={sending} onClick={() => answer(opt)} style={ansBtn('#2563EB')}>
+                {opt}
+              </button>
+            ))
+          : (
+            <>
+              <button disabled={sending} onClick={() => answer('예')} style={ansBtn('#DC2626')}>예</button>
+              <button disabled={sending} onClick={() => answer('아니요')} style={ansBtn('#16A34A')}>아니요</button>
+            </>
+          )}
+      </div>
+      {done && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: '#16A34A' }}>→ 판정이 {done}(으)로 갱신됐어요</div>}
+    </div>
+  );
 }
 
-function ResultCard({ item }) {
+/* ── 메뉴 카드 ── */
+function ResultCard({ item, onUpdated }) {
   const risk = item.risk || {};
   const level = risk.level || 'SAFE';
   const style = LEVEL_STYLE[level];
   const [open, setOpen] = useState(level === 'WARNING');
 
-  const ingredients = item.ingredients || [];
-  const groups = groupReasons([...(risk.confirmed_reasons || []), ...(risk.possible_reasons || [])]);
+  const confirmed = risk.confirmed_reasons || [];
+  const possible = risk.possible_reasons || [];
   const staffQuestions = risk.staff_questions || [];
+  const ingredients = item.ingredients || [];
+
+  const withRatio = ingredients.filter((i) => typeof i.ratio_percent === 'number');
+  const isRealRatio = ingredients.some((i) => i.ratio_source === 'menuzen');
   const displayName = item.menu_translated || item.menu;
 
   return (
@@ -154,36 +128,82 @@ function ResultCard({ item }) {
 
       {open && (
         <div style={cardBody}>
-          {groups.map((g, i) => {
-            const info = KIND_INFO[g.kind] || KIND_INFO.allergy;
-            return (
-              <div key={i} style={{ ...alertBox, background: style.bg, border: `1px solid ${style.border}` }}>
-                <div style={{ ...alertTitle, color: style.text }}>
-                  <span style={{ marginRight: 6 }}>⚠️</span>{info.title}
-                </div>
-                <div style={alertDesc}>
-                  Contains <strong>{g.label}</strong> ({g.ingredients.join(', ')}) which triggers your {g.label} {info.preset} preset.
-                </div>
-              </div>
-            );
-          })}
-
-          {ingredients.length > 0 && (
-            <div style={{ marginTop: groups.length > 0 ? 12 : 0 }}>
-              <div style={breakdownLabel}>INGREDIENT BREAKDOWN</div>
-              <div style={breakdownText}>{renderBreakdown(ingredients, groups)}.</div>
+          {item.description_translated && (
+            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 10, lineHeight: 1.4 }}>
+              {item.description_translated}
             </div>
           )}
 
-          {staffQuestions.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={breakdownLabel}>ASK THE STAFF</div>
-              {staffQuestions.map((q, i) => (
-                <div key={i} style={{ marginBottom: 6 }}>
-                  <div style={{ fontSize: 13, color: '#0F172A' }}>{q.translated}</div>
-                  <div style={{ fontSize: 12, color: '#94A3B8' }}>{q.ko}</div>
+          {/* 확정 위험 사유 */}
+          {confirmed.length > 0 && (
+            <div style={{ ...alertBox, background: style.bg, border: `1px solid ${style.border}`, marginBottom: 8 }}>
+              <div style={{ ...alertTitle, color: style.text }}>
+                <span style={{ marginRight: 6 }}>⚠️</span>확정 위험 성분
+              </div>
+              {confirmed.map((r, i) => (
+                <div key={i} style={alertDesc}>
+                  • <strong>{r.ingredient}</strong> ({r.label}) {r.severity ? `- ${r.severity}` : ''}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* 가능성 위험 사유 */}
+          {possible.length > 0 && (
+            <div style={{ ...alertBox, background: '#FFFBEB', border: '1px solid #FDE68A', marginBottom: 8 }}>
+              <div style={{ ...alertTitle, color: '#D97706' }}>
+                <span style={{ marginRight: 6 }}>❓</span>확인 필요 성분 (가게마다 다름)
+              </div>
+              {possible.map((r, i) => (
+                <div key={i} style={{ ...alertDesc, color: '#92400E' }}>
+                  • <strong>{r.ingredient}</strong> ({r.label})
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 직원 확인 질문 */}
+          {staffQuestions.map((q, i) => (
+            <StaffQuestion key={i} item={item} question={q} onUpdated={onUpdated} />
+          ))}
+
+          {/* 성분 비율 / 그래프 */}
+          {withRatio.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={breakdownLabel}>
+                성분 구성 {isRealRatio ? '(실제 중량 기준)' : '(AI 추정치)'}
+              </div>
+              {withRatio.map((ing, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, width: 110, color: '#334155', fontWeight: ing.tags?.length ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ing.name_translated || ing.name}
+                  </span>
+                  <div style={{ flex: 1, height: 6, background: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.min(ing.ratio_percent, 100)}%`, height: '100%', background: style.text, borderRadius: 3 }} />
+                  </div>
+                  <span style={{ fontSize: 11, width: 32, textAlign: 'right', color: '#64748B' }}>{ing.ratio_percent}%</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 기타 재료 목록 */}
+          {ingredients.filter((i) => typeof i.ratio_percent !== 'number').length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={breakdownLabel}>INGREDIENT BREAKDOWN</div>
+              <div style={breakdownText}>
+                {ingredients
+                  .filter((i) => typeof i.ratio_percent !== 'number')
+                  .map((i) => (i.name_translated || i.name) + (i.certainty === 'possible' ? '(가능)' : ''))
+                  .join(', ')}.
+              </div>
+            </div>
+          )}
+
+          {item.data_source && (
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 10, textAlign: 'right' }}>
+              판정 근거: {{ menuzen: '공공데이터(메뉴젠)', menu_base: '자체 메뉴 DB', menu_board: '메뉴판 표기', ai: 'AI 추론' }[item.data_source]}
+              {item.family?.length > 1 && ` · 유사 레시피 ${item.family.length}종 비교`}
             </div>
           )}
         </div>
@@ -199,49 +219,38 @@ export default function ResultPage() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
 
-  const isDemo = location.state?.demo;
   const menus = location.state?.menus;
   const ocrText = location.state?.ocrText;
 
   useEffect(() => {
-    if (isDemo) {
-      setResults(DEMO_RESULTS);
-      return;
-    }
-    // menus가 있으면 우선 사용 — /ocr이 이미 가격·상호명을 뺀 메뉴명만 정제해서 준 목록이라
-    // ocr_text를 그대로 보내 서버가 줄 단위로 재파싱(가격까지 메뉴명에 섞임)하는 것보다 정확함
-    if (menus && menus.length > 0) {
-      fetchAnalysis({ menus });
-    } else if (ocrText) {
-      fetchAnalysis({ ocr_text: ocrText });
-    }
+    if (menus?.length || ocrText) fetchAnalysis();
   }, []);
 
-  const fetchAnalysis = async (payload) => {
+  const fetchAnalysis = async () => {
     setLoading(true);
     setError('');
     try {
-      // 로그인 상태면 Supabase 토큰을 실어 보내서 서버가 DB에 저장된 프로필(알레르기 등)을 적용하게 함
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
-
-      const res = await axios.post(`${API_URL}/analyze`, payload, { timeout: 30000, headers });
+      const body = menus?.length ? { menus } : { ocr_text: ocrText };
+      const res = await axios.post(`${API_URL}/analyze`, body, {
+        headers: { ...(await authHeader()) },
+        timeout: 120000,
+      });
       setResults(res.data.results || []);
     } catch (err) {
       if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
         setError('백엔드 서버에 연결할 수 없어요. 서버가 실행 중인지 확인해주세요.');
       } else if (err.code === 'ECONNABORTED') {
         setError('분석 시간이 너무 오래 걸려요. 잠시 후 다시 시도해주세요.');
-      } else if (err.response?.status === 500) {
-        setError('서버 내부 오류가 발생했어요. 백엔드 터미널에서 에러를 확인해주세요.');
-      } else if (err.response?.status === 429) {
-        setError('AI API 요청 한도를 초과했어요. 잠시 후 다시 시도해주세요.');
       } else {
         setError(`오류가 발생했어요: ${err.message}`);
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUpdated = (index, updated) => {
+    setResults((prev) => prev.map((r, i) => (i === index ? updated : r)));
   };
 
   const sorted = [...results].sort((a, b) => (LEVEL_ORDER[b.risk?.level] ?? 0) - (LEVEL_ORDER[a.risk?.level] ?? 0));
@@ -289,7 +298,9 @@ export default function ResultPage() {
 
           {sorted.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {sorted.map((item, i) => <ResultCard key={i} item={item} />)}
+              {sorted.map((item, i) => (
+                <ResultCard key={i} item={item} onUpdated={(updated) => handleUpdated(i, updated)} />
+              ))}
             </div>
           ) : (
             !loading && (
@@ -486,7 +497,6 @@ const cardBody = {
 const alertBox = {
   borderRadius: 12,
   padding: '12px 14px',
-  marginBottom: 4,
 };
 
 const alertTitle = {
@@ -516,6 +526,37 @@ const breakdownText = {
   color: '#334155',
   lineHeight: 1.6,
 };
+
+const qBox = {
+  background: '#FFFBEB',
+  border: '1px dashed #F59E0B',
+  borderRadius: 12,
+  padding: 12,
+  marginTop: 10,
+  marginBottom: 10,
+};
+
+const ttsBtn = {
+  border: '1px solid #93C5FD',
+  color: '#1D4ED8',
+  background: '#EFF6FF',
+  borderRadius: 8,
+  padding: '5px 10px',
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+const ansBtn = (c) => ({
+  border: 'none',
+  background: c,
+  color: '#FFFFFF',
+  borderRadius: 8,
+  padding: '6px 14px',
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: 'pointer',
+});
 
 const bottomNavStyle = {
   height: 64,
