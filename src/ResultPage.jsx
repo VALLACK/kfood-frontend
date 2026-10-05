@@ -231,7 +231,7 @@ export default function ResultPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
-      const res = await axios.post(`${API_URL}/analyze`, payload, { timeout: 30000, headers });
+      const res = await axios.post(`${API_URL}/analyze`, payload, { timeout: 180000, headers });
       setResults(res.data.results || []);
       setProfileApplied(res.data.profile_applied !== false);
     } catch (err) {
