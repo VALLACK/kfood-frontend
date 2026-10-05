@@ -2,6 +2,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { supabase } from './supabaseClient';
+import StaffQuestionCard from './StaffQuestionCard';
+import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -123,7 +125,7 @@ function renderBreakdown(ingredients, groups) {
   }, []);
 }
 
-function ResultCard({ item }) {
+function ResultCard({ item, onUpdated }) {
   const risk = item.risk || {};
   const level = risk.level || 'SAFE';
   const style = LEVEL_STYLE[level];
@@ -152,6 +154,12 @@ function ResultCard({ item }) {
         </div>
       </button>
 
+      {!open && staffQuestions.length > 0 && (
+        <button style={staffHintBtn} onClick={() => setOpen(true)}>
+          💬 Ask the staff ({staffQuestions.length}) · Needs confirmation
+        </button>
+      )}
+
       {open && (
         <div style={cardBody}>
           {groups.map((g, i) => {
@@ -179,10 +187,7 @@ function ResultCard({ item }) {
             <div style={{ marginTop: 12 }}>
               <div style={breakdownLabel}>ASK THE STAFF</div>
               {staffQuestions.map((q, i) => (
-                <div key={i} style={{ marginBottom: 6 }}>
-                  <div style={{ fontSize: 13, color: '#0F172A' }}>{q.translated}</div>
-                  <div style={{ fontSize: 12, color: '#94A3B8' }}>{q.ko}</div>
-                </div>
+                <StaffQuestionCard key={`${q.kind}-${q.ingredient}-${i}`} item={item} question={q} onUpdated={onUpdated} />
               ))}
             </div>
           )}
@@ -198,6 +203,7 @@ export default function ResultPage() {
   const [results, setResults]   = useState([]);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
+  const [profileApplied, setProfileApplied] = useState(true);
 
   const isDemo = location.state?.demo;
   const menus = location.state?.menus;
@@ -227,24 +233,29 @@ export default function ResultPage() {
 
       const res = await axios.post(`${API_URL}/analyze`, payload, { timeout: 30000, headers });
       setResults(res.data.results || []);
+      setProfileApplied(res.data.profile_applied !== false);
     } catch (err) {
       if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
-        setError('백엔드 서버에 연결할 수 없어요. 서버가 실행 중인지 확인해주세요.');
+        setError('Cannot reach the server. Please check that it is running.');
       } else if (err.code === 'ECONNABORTED') {
-        setError('분석 시간이 너무 오래 걸려요. 잠시 후 다시 시도해주세요.');
+        setError('The analysis is taking too long. Please try again in a moment.');
       } else if (err.response?.status === 500) {
-        setError('서버 내부 오류가 발생했어요. 백엔드 터미널에서 에러를 확인해주세요.');
+        setError('A server error occurred. Please try again later.');
       } else if (err.response?.status === 429) {
-        setError('AI API 요청 한도를 초과했어요. 잠시 후 다시 시도해주세요.');
+        setError('AI request limit reached. Please try again shortly.');
       } else {
-        setError(`오류가 발생했어요: ${err.message}`);
+        setError(`Something went wrong: ${err.message}`);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const sorted = [...results].sort((a, b) => (LEVEL_ORDER[b.risk?.level] ?? 0) - (LEVEL_ORDER[a.risk?.level] ?? 0));
+  // 같은 이름의 메뉴가 두 번 나올 수 있어(예: 소/대) 이름이 아니라 원래 순번(idx)으로 갱신한다
+  const sorted = results
+    .map((item, idx) => ({ item, idx }))
+    .sort((a, b) => (LEVEL_ORDER[b.item.risk?.level] ?? 0) - (LEVEL_ORDER[a.item.risk?.level] ?? 0));
+  const handleUpdated = (idx, updated) => setResults((prev) => prev.map((r, i) => (i === idx ? updated : r)));
   const summary = {
     WARNING: results.filter((r) => r.risk?.level === 'WARNING').length,
     CAUTION: results.filter((r) => r.risk?.level === 'CAUTION').length,
@@ -255,7 +266,7 @@ export default function ResultPage() {
     <div style={pageOuter}>
       <div style={mobileCard}>
         <header style={headerBar}>
-          <button onClick={() => navigate(-1)} style={backBtn} aria-label="뒤로">
+          <button onClick={() => navigate(-1)} style={backBtn} aria-label="Back">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0F172A" strokeWidth="2.5">
               <polyline points="15 18 9 12 15 6" />
             </svg>
@@ -284,19 +295,26 @@ export default function ResultPage() {
             </div>
           )}
 
-          {loading && <div style={loadingBox}>🧠 AI가 성분을 분석 중이에요...</div>}
+          {loading && <div style={loadingBox}>🧠 Analyzing ingredients...</div>}
           {error   && <div style={errorBox}>⚠️ {error}</div>}
+          {!profileApplied && results.length > 0 && (
+            <div style={noticeBox}>
+              ⚠️ Your profile was not applied. Log in and set your allergies and diet to get personalized results. Until then, SAFE does not mean the dish is safe for you.
+            </div>
+          )}
 
           {sorted.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {sorted.map((item, i) => <ResultCard key={i} item={item} />)}
+              {sorted.map(({ item, idx }) => (
+                <ResultCard key={idx} item={item} onUpdated={(updated) => handleUpdated(idx, updated)} />
+              ))}
             </div>
           ) : (
             !loading && (
               <div style={emptyBox}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-                <div style={{ fontWeight: 700, marginBottom: 6, color: '#0F172A' }}>결과가 없어요</div>
-                <div style={{ fontSize: 13, color: '#94A3B8' }}>스캔 페이지로 돌아가서 메뉴판을 업로드해주세요.</div>
+                <div style={{ fontWeight: 700, marginBottom: 6, color: '#0F172A' }}>No results</div>
+                <div style={{ fontSize: 13, color: '#94A3B8' }}>Go back to the scan page and scan a menu.</div>
               </div>
             )
           )}
@@ -319,19 +337,23 @@ function BottomNav() {
         </svg>
         <span>Home</span>
       </button>
-      <button onClick={() => navigate('/history')} style={navItem(true)}>
-        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="12 6 12 12 16 14" />
-        </svg>
-        <span>History</span>
-      </button>
-      <button onClick={() => navigate('/chat')} style={navItem(false)}>
-        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-        <span>Chat</span>
-      </button>
+      {SHOW_HISTORY_CHAT_TABS && (
+        <>
+          <button onClick={() => navigate('/history')} style={navItem(true)}>
+            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            <span>History</span>
+          </button>
+          <button onClick={() => navigate('/chat')} style={navItem(false)}>
+            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span>Chat</span>
+          </button>
+        </>
+      )}
       <button onClick={() => navigate('/profile')} style={navItem(false)}>
         <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -436,6 +458,8 @@ const summaryDot = {
 };
 
 const loadingBox = { textAlign: 'center', padding: '40px 20px', fontSize: 14, color: '#64748B' };
+const staffHintBtn = { display: 'block', width: 'calc(100% - 32px)', margin: '0 16px 14px', textAlign: 'left', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '9px 12px', fontSize: 12, fontWeight: 700, color: '#92400E', cursor: 'pointer' };
+const noticeBox = { background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#92400E', marginBottom: 14, lineHeight: 1.5 };
 const errorBox = { background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#DC2626', marginBottom: 14, lineHeight: 1.5 };
 const emptyBox = { textAlign: 'center', padding: '60px 20px' };
 
