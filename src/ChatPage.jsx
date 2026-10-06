@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { supabase } from './supabaseClient';
-import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -22,7 +21,7 @@ export default function ChatPage() {
     {
       id: nextId(),
       role: 'ai',
-      text: 'Hi! Ask me anything about Korean food. For example: "Is bibimbap safe for me?"',
+      text: '안녕하세요! 궁금한 한국 음식에 대해 자유롭게 물어보세요. 예: "Is bibimbap safe for me?"',
       time: formatTime(new Date()),
     },
   ]);
@@ -55,7 +54,7 @@ export default function ChatPage() {
         menus: [{ name: text }],
       }, { headers, timeout: 30000 });
       const menuResult = analyzeRes.data.results?.[0];
-      if (!menuResult) throw new Error('Could not get an analysis result.');
+      if (!menuResult) throw new Error('분석 결과를 받지 못했어요.');
 
       const qnaRes = await axios.post(`${API_URL}/qna`, {
         menu_result: menuResult,
@@ -78,7 +77,7 @@ export default function ChatPage() {
     } catch (err) {
       setMessages((m) => [...m, {
         id: nextId(), role: 'ai', error: true,
-        text: `Sorry, I could not get an answer. ${err.message || ''}`,
+        text: `답변을 가져오지 못했어요. ${err.message || ''}`,
         time: formatTime(new Date()),
       }]);
     } finally {
@@ -124,7 +123,7 @@ export default function ChatPage() {
     <div style={pageOuter}>
       <div style={mobileCard}>
         <header style={headerBar}>
-          <button onClick={() => navigate(-1)} style={backBtn} aria-label="Back">
+          <button onClick={() => navigate(-1)} style={backBtn} aria-label="뒤로">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0F172A" strokeWidth="2.5">
               <polyline points="15 18 9 12 15 6" />
             </svg>
@@ -164,7 +163,7 @@ export default function ChatPage() {
                   <div style={{ ...aiText, color: m.error ? '#DC2626' : '#334155' }}>{m.text}</div>
                   {m.staffQuestionKo && (
                     <div style={noteBox}>
-                      <div style={noteTitle}>Ask the staff</div>
+                      <div style={noteTitle}>직원에게 물어보세요</div>
                       <div style={noteText}>{m.staffQuestionKo}</div>
                     </div>
                   )}
@@ -181,7 +180,7 @@ export default function ChatPage() {
                   <span style={aiAvatar}>🛡️</span>
                   <span style={aiName}>Safety Guard AI</span>
                 </div>
-                <div style={{ ...aiText, color: '#94A3B8' }}>Thinking...</div>
+                <div style={{ ...aiText, color: '#94A3B8' }}>생각 중...</div>
               </div>
             </div>
           )}
@@ -200,7 +199,7 @@ export default function ChatPage() {
             <button
               onClick={toggleRecording}
               style={{ ...micBtn, color: recording ? '#DC2626' : '#94A3B8' }}
-              aria-label="Voice input"
+              aria-label="음성 입력"
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
@@ -213,7 +212,7 @@ export default function ChatPage() {
             onClick={() => handleSend()}
             disabled={sending || !input.trim()}
             style={{ ...sendBtn, opacity: sending || !input.trim() ? 0.5 : 1 }}
-            aria-label="Send"
+            aria-label="전송"
           >
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2">
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
@@ -238,23 +237,19 @@ function BottomNav() {
         </svg>
         <span>Home</span>
       </button>
-      {SHOW_HISTORY_CHAT_TABS && (
-        <>
-          <button onClick={() => navigate('/history')} style={navItem(false)}>
-            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            <span>History</span>
-          </button>
-          <button onClick={() => navigate('/chat')} style={navItem(true)}>
-            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span>Chat</span>
-          </button>
-        </>
-      )}
+      <button onClick={() => navigate('/history')} style={navItem(false)}>
+        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        <span>History</span>
+      </button>
+      <button onClick={() => navigate('/chat')} style={navItem(true)}>
+        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        <span>Chat</span>
+      </button>
       <button onClick={() => navigate('/profile')} style={navItem(false)}>
         <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
