@@ -22,58 +22,6 @@ const KIND_INFO = {
   diet:             { title: 'Diet Conflict Detected', preset: 'Diet' },
 };
 
-// 데모용 결과 데이터 (실제 /analyze 응답과 동일한 구조)
-const DEMO_RESULTS = [
-  {
-    menu: '해물파전',
-    menu_translated: 'Seafood Green Onion Pancake',
-    ingredients: [
-      { name: '밀가루', name_translated: 'Wheat flour', tags: ['wheat'], certainty: 'confirmed' },
-      { name: '대파', name_translated: 'Green Onion', tags: [], certainty: 'confirmed' },
-      { name: '오징어', name_translated: 'Squid', tags: ['squid'], certainty: 'confirmed' },
-      { name: '조개', name_translated: 'Clams', tags: ['shellfish'], certainty: 'confirmed' },
-      { name: '굴', name_translated: 'Oysters', tags: ['shellfish'], certainty: 'confirmed' },
-      { name: '달걀', name_translated: 'Egg', tags: ['egg'], certainty: 'confirmed' },
-      { name: '마늘', name_translated: 'Garlic', tags: [], certainty: 'confirmed' },
-    ],
-    risk: {
-      level: 'WARNING',
-      confirmed_reasons: [
-        { kind: 'allergy', tag: 'squid', label: 'Shellfish', ingredient: '오징어', certainty: 'confirmed', severity: '심각' },
-        { kind: 'allergy', tag: 'shellfish', label: 'Shellfish', ingredient: '조개', certainty: 'confirmed', severity: '심각' },
-        { kind: 'allergy', tag: 'shellfish', label: 'Shellfish', ingredient: '굴', certainty: 'confirmed', severity: '심각' },
-      ],
-      possible_reasons: [],
-      needs_confirmation: false,
-      staff_questions: [],
-    },
-  },
-  {
-    menu: '순두부찌개',
-    menu_translated: 'Soft Tofu Stew',
-    ingredients: [
-      { name: '순두부', name_translated: 'Soft Tofu', tags: ['soy'], certainty: 'confirmed' },
-      { name: '액젓', name_translated: 'Fish Sauce', tags: ['fish'], certainty: 'possible' },
-    ],
-    risk: {
-      level: 'CAUTION',
-      confirmed_reasons: [],
-      possible_reasons: [{ kind: 'allergy', tag: 'fish', label: 'Fish', ingredient: '액젓', certainty: 'possible', severity: '경미' }],
-      needs_confirmation: true,
-      staff_questions: [{ kind: 'contains', ingredient: '액젓', tag: 'fish', tags: ['fish'], options: [], ko: '순두부찌개에 액젓이 들어가나요?', translated: 'Does the Soft Tofu Stew contain fish sauce?' }],
-    },
-  },
-  {
-    menu: '돌솥비빔밥',
-    menu_translated: 'Hot Stone Pot Bibimbap',
-    ingredients: [
-      { name: '쌀밥', name_translated: 'Rice', tags: [], certainty: 'confirmed' },
-      { name: '나물', name_translated: 'Seasoned Vegetables', tags: [], certainty: 'confirmed' },
-    ],
-    risk: { level: 'SAFE', confirmed_reasons: [], possible_reasons: [], needs_confirmation: false, staff_questions: [] },
-  },
-];
-
 function groupReasons(reasons) {
   // 같은 표시 라벨(예: shrimp·crab 태그가 둘 다 "Shellfish")은 한 박스로 합침
   const map = new Map();
@@ -136,6 +84,24 @@ function ResultCard({ item, onUpdated }) {
   const staffQuestions = risk.staff_questions || [];
   const displayName = item.menu_translated || item.menu;
 
+  // 성분 비율이 있는 성분만 표시
+  const withRatio = ingredients.filter(
+    (i) => typeof i.ratio_percent === 'number'
+  );
+
+  // 실제 데이터인지 AI 추정인지 확인
+  const isRealRatio = ingredients.some(
+    (i) => i.ratio_source === 'menuzen'
+  );
+
+  // 판정 근거 표시
+  const sourceLabel = {
+    menuzen: 'Public Data (MenuZen)',
+    menu_base: 'Internal Menu Database',
+    menu_board: 'Menu Board',
+    ai: 'AI Inference',
+  };
+
   return (
     <div style={{ ...cardBase, ...(level === 'WARNING' ? { border: `2px solid ${style.border}` } : {}) }}>
       <button style={cardHeaderBtn} onClick={() => setOpen((v) => !v)}>
@@ -176,10 +142,75 @@ function ResultCard({ item, onUpdated }) {
             );
           })}
 
-          {ingredients.length > 0 && (
+          {/* 성분 비율 */}
+          {withRatio.length > 0 && (
             <div style={{ marginTop: groups.length > 0 ? 12 : 0 }}>
-              <div style={breakdownLabel}>INGREDIENT BREAKDOWN</div>
-              <div style={breakdownText}>{renderBreakdown(ingredients, groups)}.</div>
+              <div style={breakdownLabel}>
+                INGREDIENT BREAKDOWN{' '}
+                {isRealRatio
+                  ? '(Based on Actual Weight)'
+                  : '(AI Estimated)'}
+              </div>
+
+              <div style={ratioList}>
+                {withRatio.map((ing, i) => {
+                  const name =
+                    ing.name_translated || ing.name;
+
+                  return (
+                    <div key={i} style={ratioItem}>
+                      <div style={ratioHeader}>
+                        <span>{name}</span>
+                        <strong>{ing.ratio_percent}%</strong>
+                      </div>
+
+                      <div style={ratioBar}>
+                        <div
+                          style={{
+                            ...ratioBarFill,
+                            width: `${Math.min(
+                              Math.max(ing.ratio_percent, 0),
+                              100
+                            )}%`
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 기존 성분 표시 */}
+          {ingredients.length > 0 && withRatio.length === 0 && (
+            <div
+              style={{
+                marginTop: groups.length > 0 ? 12 : 0
+              }}
+            >
+              <div style={breakdownLabel}>
+                INGREDIENT BREAKDOWN
+              </div>
+
+              <div style={breakdownText}>
+                {renderBreakdown(ingredients, groups)}.
+              </div>
+            </div>
+          )}
+
+          {/* 판정 근거 */}
+          {item.data_source && (
+            <div style={reasoningBox}>
+              <div style={breakdownLabel}>REASONING</div>
+
+              <div style={reasoningText}>
+                {sourceLabel[item.data_source] ||
+                  item.data_source}
+
+                {item.family?.length > 1 &&
+                  ` · Compared with ${item.family.length} similar recipes`}
+              </div>
             </div>
           )}
 
@@ -205,15 +236,10 @@ export default function ResultPage() {
   const [error, setError]       = useState('');
   const [profileApplied, setProfileApplied] = useState(true);
 
-  const isDemo = location.state?.demo;
   const menus = location.state?.menus;
   const ocrText = location.state?.ocrText;
 
   useEffect(() => {
-    if (isDemo) {
-      setResults(DEMO_RESULTS);
-      return;
-    }
     // menus가 있으면 우선 사용 — /ocr이 이미 가격·상호명을 뺀 메뉴명만 정제해서 준 목록이라
     // ocr_text를 그대로 보내 서버가 줄 단위로 재파싱(가격까지 메뉴명에 섞임)하는 것보다 정확함
     if (menus && menus.length > 0) {
@@ -230,8 +256,33 @@ export default function ResultPage() {
       // 로그인 상태면 Supabase 토큰을 실어 보내서 서버가 DB에 저장된 프로필(알레르기 등)을 적용하게 함
       const { data: { session } } = await supabase.auth.getSession();
       const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+      
+      const isGuest = localStorage.getItem('isGuest') === 'true';
+      const guest = JSON.parse(
+        localStorage.getItem('guestProfile') || 'null'
+      );
 
-      const res = await axios.post(`${API_URL}/analyze`, payload, { timeout: 180000, headers });
+       const body = {
+      ...payload,
+
+      ...(isGuest && guest
+        ? {
+            profile: {
+              allergies: guest.allergies || [],
+              religious_diet: guest.religious_diet || null,
+              vegetarian_type: guest.vegetarian_type || null,
+              preferred_language:
+                localStorage.getItem('appLanguage') || 'en',
+            },
+          }
+        : {}),
+      };
+
+    const res = await axios.post(`${API_URL}/analyze`, body, {
+      timeout: 180000,
+      headers,
+    });
+
       setResults(res.data.results || []);
       setProfileApplied(res.data.profile_applied !== false);
     } catch (err) {
@@ -569,4 +620,49 @@ const navItem = (isActive) => ({
 const navIcon = {
   width: 20,
   height: 20,
+};
+
+const ratioList = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+};
+
+const ratioItem = {
+  width: '100%',
+};
+
+const ratioHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  fontSize: 12,
+  color: '#334155',
+  marginBottom: 4,
+};
+
+const ratioBar = {
+  width: '100%',
+  height: 7,
+  background: '#E2E8F0',
+  borderRadius: 10,
+  overflow: 'hidden',
+};
+
+const ratioBarFill = {
+  height: '100%',
+  background: '#64748B',
+  borderRadius: 10,
+};
+
+const reasoningBox = {
+  marginTop: 12,
+  paddingTop: 12,
+  borderTop: '1px solid #F1F5F9',
+};
+
+const reasoningText = {
+  fontSize: 12,
+  color: '#64748B',
+  lineHeight: 1.5,
 };
