@@ -19,81 +19,9 @@ async function authHeader() {
   return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
-// 직원에게 들려줄 한국어 질문 (브라우저 내장 TTS)
-function speakKo(text) {
-  if (!('speechSynthesis' in window)) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'ko-KR';
-  u.rate = 0.9;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-}
-
-/* ── 직원 확인 질문 카드 ── */
-function StaffQuestion({ item, question, onUpdated }) {
-  const [sending, setSending] = useState(false);
-  const [done, setDone] = useState('');
-
-  const answer = async (value) => {
-    setSending(true);
-    try {
-      const res = await axios.post(
-        `${API_URL}/qna/confirm`,
-        {
-          menu_result: item,
-          question: {
-            kind: question.kind,
-            ingredient: question.ingredient,
-            tag: question.tag,
-            options: question.options || [],
-          },
-          staff_answer: value,
-          input_type: 'text',
-        },
-        { headers: { ...(await authHeader()) }, timeout: 60000 }
-      );
-      setDone(res.data.result?.risk?.level || '');
-      onUpdated(res.data.result);
-    } catch (e) {
-      alert('답변 반영에 실패했어요: ' + e.message);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const isVariant = question.kind === 'variant';
-
-  return (
-    <div style={qBox}>
-      <div style={{ fontSize: 11, color: '#D97706', fontWeight: 700, marginBottom: 4 }}>직원에게 보여주세요</div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', lineHeight: 1.4 }}>{question.ko}</div>
-      <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{question.translated}</div>
-
-      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-        <button onClick={() => speakKo(question.ko)} style={ttsBtn}>🔊 한국어로 읽어주기</button>
-      </div>
-
-      <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-        {isVariant
-          ? (question.options || []).map((opt) => (
-              <button key={opt} disabled={sending} onClick={() => answer(opt)} style={ansBtn('#2563EB')}>
-                {opt}
-              </button>
-            ))
-          : (
-            <>
-              <button disabled={sending} onClick={() => answer('예')} style={ansBtn('#DC2626')}>예</button>
-              <button disabled={sending} onClick={() => answer('아니요')} style={ansBtn('#16A34A')}>아니요</button>
-            </>
-          )}
-      </div>
-      {done && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: '#16A34A' }}>→ 판정이 {done}(으)로 갱신됐어요</div>}
-    </div>
-  );
-}
 
 /* ── 메뉴 카드 ── */
-function ResultCard({ item, onUpdated }) {
+function ResultCard({ item }) {
   const risk = item.risk || {};
   const level = risk.level || 'SAFE';
   const style = LEVEL_STYLE[level];
@@ -101,7 +29,6 @@ function ResultCard({ item, onUpdated }) {
 
   const confirmed = risk.confirmed_reasons || [];
   const possible = risk.possible_reasons || [];
-  const staffQuestions = risk.staff_questions || [];
   const ingredients = item.ingredients || [];
 
   const withRatio = ingredients.filter((i) => typeof i.ratio_percent === 'number');
@@ -138,7 +65,7 @@ function ResultCard({ item, onUpdated }) {
           {confirmed.length > 0 && (
             <div style={{ ...alertBox, background: style.bg, border: `1px solid ${style.border}`, marginBottom: 8 }}>
               <div style={{ ...alertTitle, color: style.text }}>
-                <span style={{ marginRight: 6 }}>⚠️</span>확정 위험 성분
+                <span style={{ marginRight: 6 }}>⚠️</span>Confirmed Risk Ingredient
               </div>
               {confirmed.map((r, i) => (
                 <div key={i} style={alertDesc}>
@@ -152,7 +79,7 @@ function ResultCard({ item, onUpdated }) {
           {possible.length > 0 && (
             <div style={{ ...alertBox, background: '#FFFBEB', border: '1px solid #FDE68A', marginBottom: 8 }}>
               <div style={{ ...alertTitle, color: '#D97706' }}>
-                <span style={{ marginRight: 6 }}>❓</span>확인 필요 성분 (가게마다 다름)
+                <span style={{ marginRight: 6 }}>❓</span>Possible Risk Ingredient (Varies by Restaurant)
               </div>
               {possible.map((r, i) => (
                 <div key={i} style={{ ...alertDesc, color: '#92400E' }}>
@@ -162,16 +89,11 @@ function ResultCard({ item, onUpdated }) {
             </div>
           )}
 
-          {/* 직원 확인 질문 */}
-          {staffQuestions.map((q, i) => (
-            <StaffQuestion key={i} item={item} question={q} onUpdated={onUpdated} />
-          ))}
-
           {/* 성분 비율 / 그래프 */}
           {withRatio.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <div style={breakdownLabel}>
-                성분 구성 {isRealRatio ? '(실제 중량 기준)' : '(AI 추정치)'}
+                INGREDIENT BREAKDOWN {isRealRatio ? '(Based on Actual Weight)' : '(AI Estimated)'}
               </div>
               {withRatio.map((ing, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -194,7 +116,7 @@ function ResultCard({ item, onUpdated }) {
               <div style={breakdownText}>
                 {ingredients
                   .filter((i) => typeof i.ratio_percent !== 'number')
-                  .map((i) => (i.name_translated || i.name) + (i.certainty === 'possible' ? '(가능)' : ''))
+                  .map((i) => (i.name_translated || i.name) + (i.certainty === 'possible' ? ' (Possible)' : ''))
                   .join(', ')}.
               </div>
             </div>
@@ -202,8 +124,8 @@ function ResultCard({ item, onUpdated }) {
 
           {item.data_source && (
             <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 10, textAlign: 'right' }}>
-              판정 근거: {{ menuzen: '공공데이터(메뉴젠)', menu_base: '자체 메뉴 DB', menu_board: '메뉴판 표기', ai: 'AI 추론' }[item.data_source]}
-              {item.family?.length > 1 && ` · 유사 레시피 ${item.family.length}종 비교`}
+              REASONING: {{ menuzen: 'Public Data (MenuZen)', menu_base: 'Internal Menu Database', menu_board: 'Menu Board', ai: 'AI Inference' }[item.data_source]}
+              {item.family?.length > 1 && ` · Compared with ${item.family.length} similar recipes`}
             </div>
           )}
         </div>
@@ -230,7 +152,17 @@ export default function ResultPage() {
     setLoading(true);
     setError('');
     try {
-      const body = menus?.length ? { menus } : { ocr_text: ocrText };
+      const isGuest = localStorage.getItem('isGuest') === 'true';
+      const guest = JSON.parse(localStorage.getItem('guestProfile') || 'null');
+      const body = {
+        ...(menus?.length ? { menus } : { ocr_text: ocrText }),
+        ...(isGuest && guest ? { profile: {
+          allergies: guest.allergies || [],
+          religious_diet: guest.religious_diet || null,
+          vegetarian_type: guest.vegetarian_type || null,
+          preferred_language: localStorage.getItem('appLanguage') || 'en',
+        } } : {}),
+      };
       const res = await axios.post(`${API_URL}/analyze`, body, {
         headers: { ...(await authHeader()) },
         timeout: 120000,
@@ -238,22 +170,27 @@ export default function ResultPage() {
       setResults(res.data.results || []);
     } catch (err) {
       if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
-        setError('백엔드 서버에 연결할 수 없어요. 서버가 실행 중인지 확인해주세요.');
+        setError('Unable to connect to the backend server. Please check if the server is running.');
       } else if (err.code === 'ECONNABORTED') {
-        setError('분석 시간이 너무 오래 걸려요. 잠시 후 다시 시도해주세요.');
+        setError('The analysis is taking too long. Please try again later.');
+      } else if (err.response?.status === 429) {
+        setError('Too many requests. Please try again later.');
+      } else if (err.response?.status === 500) {
+        setError('Something went wrong with the server. Please try again later.');
       } else {
-        setError(`오류가 발생했어요: ${err.message}`);
+        setError(`An error occurred: ${err.message}`);
       }
     } finally {
       setLoading(false);
     }
   };
-
-  const handleUpdated = (index, updated) => {
-    setResults((prev) => prev.map((r, i) => (i === index ? updated : r)));
-  };
-
-  const sorted = [...results].sort((a, b) => (LEVEL_ORDER[b.risk?.level] ?? 0) - (LEVEL_ORDER[a.risk?.level] ?? 0));
+  
+  const sorted = [...results].sort(
+  (a, b) =>
+    (LEVEL_ORDER[b.risk?.level] ?? 0) -
+    (LEVEL_ORDER[a.risk?.level] ?? 0)
+  );
+    
   const summary = {
     WARNING: results.filter((r) => r.risk?.level === 'WARNING').length,
     CAUTION: results.filter((r) => r.risk?.level === 'CAUTION').length,
@@ -264,7 +201,7 @@ export default function ResultPage() {
     <div style={pageOuter}>
       <div style={mobileCard}>
         <header style={headerBar}>
-          <button onClick={() => navigate(-1)} style={backBtn} aria-label="뒤로">
+          <button onClick={() => navigate(-1)} style={backBtn} aria-label="Back">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0F172A" strokeWidth="2.5">
               <polyline points="15 18 9 12 15 6" />
             </svg>
@@ -293,21 +230,21 @@ export default function ResultPage() {
             </div>
           )}
 
-          {loading && <div style={loadingBox}>🧠 AI가 성분을 분석 중이에요...</div>}
+          {loading && <div style={loadingBox}>🧠 Analyzing...</div>}
           {error   && <div style={errorBox}>⚠️ {error}</div>}
 
           {sorted.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {sorted.map((item, i) => (
-                <ResultCard key={i} item={item} onUpdated={(updated) => handleUpdated(i, updated)} />
+              {sorted.map((item, idx) => (
+                <ResultCard key={idx} item={item} />
               ))}
             </div>
           ) : (
             !loading && (
               <div style={emptyBox}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-                <div style={{ fontWeight: 700, marginBottom: 6, color: '#0F172A' }}>결과가 없어요</div>
-                <div style={{ fontSize: 13, color: '#94A3B8' }}>스캔 페이지로 돌아가서 메뉴판을 업로드해주세요.</div>
+                <div style={{ fontWeight: 700, marginBottom: 6, color: '#0F172A' }}>No Results Found</div>
+                <div style={{ fontSize: 13, color: '#94A3B8' }}>Please go back to the scan page and upload a menu.</div>
               </div>
             )
           )}
@@ -526,37 +463,6 @@ const breakdownText = {
   color: '#334155',
   lineHeight: 1.6,
 };
-
-const qBox = {
-  background: '#FFFBEB',
-  border: '1px dashed #F59E0B',
-  borderRadius: 12,
-  padding: 12,
-  marginTop: 10,
-  marginBottom: 10,
-};
-
-const ttsBtn = {
-  border: '1px solid #93C5FD',
-  color: '#1D4ED8',
-  background: '#EFF6FF',
-  borderRadius: 8,
-  padding: '5px 10px',
-  fontSize: 11,
-  fontWeight: 600,
-  cursor: 'pointer',
-};
-
-const ansBtn = (c) => ({
-  border: 'none',
-  background: c,
-  color: '#FFFFFF',
-  borderRadius: 8,
-  padding: '6px 14px',
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: 'pointer',
-});
 
 const bottomNavStyle = {
   height: 64,

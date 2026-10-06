@@ -160,6 +160,7 @@ const Profile = () => {
           allergies: allergies,
           religious_diet: religion,
           vegetarian_type: diet,
+          preferred_language: selectedLang,
         },
         { onConflict: 'user_id' }
       );
