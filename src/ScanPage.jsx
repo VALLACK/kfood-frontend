@@ -42,7 +42,7 @@ export default function ScanPage() {
         setTorchSupported(!!caps.torch);
         setCameraReady(true);
       } catch {
-        setCameraError('Camera is unavailable. Please choose a photo from your gallery.');
+        setCameraError('카메라를 사용할 수 없어요. 갤러리에서 사진을 선택해주세요.');
       }
     })();
     return () => {
@@ -79,7 +79,7 @@ export default function ScanPage() {
       navigate('/result', { state: { menus: res.data.menus, ocrText: res.data.text, fileName } });
     } catch (err) {
       setStatus('error');
-      setError('Scan failed. Please try again.\n' + (err.message || ''));
+      setError('분석에 실패했어요. 다시 시도해주세요.\n' + (err.message || ''));
     }
   };
 
@@ -119,7 +119,7 @@ export default function ScanPage() {
       <div style={mobileCard}>
         {/* 상단 바 */}
         <div style={topBar}>
-          <button onClick={handleClose} style={iconBtn} aria-label="Close">
+          <button onClick={handleClose} style={iconBtn} aria-label="닫기">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -129,7 +129,7 @@ export default function ScanPage() {
           <button
             onClick={toggleTorch}
             style={{ ...iconBtn, opacity: torchSupported ? 1 : 0.35 }}
-            aria-label="Flash"
+            aria-label="플래시"
             disabled={!torchSupported}
           >
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" strokeWidth="2">
@@ -144,7 +144,7 @@ export default function ScanPage() {
           {!capturedPreview ? (
             <video ref={videoRef} autoPlay playsInline muted style={videoStyle} />
           ) : (
-            <img src={capturedPreview} alt="Captured menu" style={videoStyle} />
+            <img src={capturedPreview} alt="촬영된 메뉴판" style={videoStyle} />
           )}
           <canvas ref={canvasRef} style={{ display: 'none' }} />
 
@@ -162,7 +162,7 @@ export default function ScanPage() {
           {status === 'error' && (
             <div style={scanningCard}>
               <div style={{ ...scanningText, color: '#FCA5A5', whiteSpace: 'pre-line' }}>{error}</div>
-              <button onClick={handleRetry} style={retryBtn}>Try again</button>
+              <button onClick={handleRetry} style={retryBtn}>다시 시도</button>
             </div>
           )}
         </div>
@@ -171,7 +171,7 @@ export default function ScanPage() {
 
         {/* 하단 컨트롤 */}
         <div style={bottomBar}>
-          <button onClick={() => galleryInputRef.current?.click()} style={sideIconBtn} aria-label="Choose from gallery">
+          <button onClick={() => galleryInputRef.current?.click()} style={sideIconBtn} aria-label="갤러리에서 선택">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" strokeWidth="2">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <circle cx="8.5" cy="8.5" r="1.5" />
@@ -183,12 +183,12 @@ export default function ScanPage() {
             onClick={handleCapture}
             disabled={!cameraReady || status === 'scanning'}
             style={{ ...captureBtn, opacity: !cameraReady || status === 'scanning' ? 0.5 : 1 }}
-            aria-label="Capture"
+            aria-label="촬영"
           >
             <span style={captureBtnInner} />
           </button>
 
-          <button style={sideIconBtnDisabled} aria-label="Settings" disabled>
+          <button style={sideIconBtnDisabled} aria-label="설정" disabled>
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" strokeWidth="2">
               <line x1="4" y1="6" x2="20" y2="6" />
               <line x1="4" y1="12" x2="20" y2="12" />
