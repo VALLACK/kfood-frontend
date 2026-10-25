@@ -77,7 +77,7 @@ function ResultCard({ item, onUpdated }) {
   const risk = item.risk || {};
   const level = risk.level || 'SAFE';
   const style = LEVEL_STYLE[level];
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(level === 'WARNING');
 
   const ingredients = item.ingredients || [];
   const groups = groupReasons([...(risk.confirmed_reasons || []), ...(risk.possible_reasons || [])]);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import gamcheonImg from './assets/gamcheon.png';
+import gamcheonImg from './assets/gamcheon.jpg';
 
 function Login() {
   const navigate = useNavigate();
