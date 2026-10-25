@@ -125,13 +125,13 @@ export default function ChatPage() {
       <div style={mobileCard}>
         <header style={headerBar}>
           <button onClick={() => navigate(-1)} style={backBtn} aria-label="Back">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0F172A" strokeWidth="2.5">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0F172A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
-          <div>
-            <div style={headerTitle}>Ask About Food</div>
-            <div style={headerSubtitle}>Busan Local AI Assistant</div>
+          <div style={headerTextGroup}>
+            <h1 style={headerTitle}>Ask About Food</h1>
+            <p style={headerSubtitle}>Busan Local AI Assistant</p>
           </div>
         </header>
 
@@ -147,27 +147,46 @@ export default function ChatPage() {
             ) : (
               <div key={m.id} style={aiRow}>
                 <div style={aiCard}>
+                  {/* AI 로봇 헤더 */}
                   <div style={aiHeaderRow}>
-                    <span style={aiAvatar}>🛡️</span>
+                    <div style={aiAvatar}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="5" y="9" width="14" height="10" rx="2" />
+                        <circle cx="9" cy="13" r="1" fill="#FFFFFF" />
+                        <circle cx="15" cy="13" r="1" fill="#FFFFFF" />
+                        <path d="M12 5v4" />
+                      </svg>
+                    </div>
                     <span style={aiName}>Safety Guard AI</span>
                   </div>
+
+                  {/* 음식명 및 위험도 배지 */}
                   {m.dish && (
                     <div style={aiDishRow}>
                       <span style={aiDishName}>{m.dish} is</span>
                       {m.level && (
-                        <span style={{ ...levelPill, color: LEVEL_STYLE[m.level]?.text, background: LEVEL_STYLE[m.level]?.bg, border: `1px solid ${LEVEL_STYLE[m.level]?.border}` }}>
+                        <span style={{ 
+                          ...levelPill, 
+                          color: LEVEL_STYLE[m.level]?.text, 
+                          background: LEVEL_STYLE[m.level]?.bg 
+                        }}>
                           {m.level}
                         </span>
                       )}
                     </div>
                   )}
-                  <div style={{ ...aiText, color: m.error ? '#DC2626' : '#334155' }}>{m.text}</div>
+
+                  {/* 본문 텍스트 */}
+                  <div style={{ ...aiText, color: m.error ? '#DC2626' : '#475569' }}>{m.text}</div>
+
+                  {/* 주의 노트 박스 */}
                   {m.staffQuestionKo && (
                     <div style={noteBox}>
-                      <div style={noteTitle}>Ask the staff</div>
+                      <div style={noteTitle}>Note on Kochujang (Red Pepper Paste):</div>
                       <div style={noteText}>{m.staffQuestionKo}</div>
                     </div>
                   )}
+
                   <div style={aiTime}>{m.time}</div>
                 </div>
               </div>
@@ -178,7 +197,14 @@ export default function ChatPage() {
             <div style={aiRow}>
               <div style={aiCard}>
                 <div style={aiHeaderRow}>
-                  <span style={aiAvatar}>🛡️</span>
+                  <div style={aiAvatar}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="5" y="9" width="14" height="10" rx="2" />
+                      <circle cx="9" cy="13" r="1" fill="#FFFFFF" />
+                      <circle cx="15" cy="13" r="1" fill="#FFFFFF" />
+                      <path d="M12 5v4" />
+                    </svg>
+                  </div>
                   <span style={aiName}>Safety Guard AI</span>
                 </div>
                 <div style={{ ...aiText, color: '#94A3B8' }}>Thinking...</div>
@@ -199,7 +225,7 @@ export default function ChatPage() {
             />
             <button
               onClick={toggleRecording}
-              style={{ ...micBtn, color: recording ? '#DC2626' : '#94A3B8' }}
+              style={{ ...micBtn, color: recording ? '#DC2626' : '#64748B' }}
               aria-label="Voice input"
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
@@ -216,7 +242,8 @@ export default function ChatPage() {
             aria-label="Send"
           >
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2">
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              <path d="M22 12L3 20L7.5 12L3 4L22 12Z" />
+              <path d="M7.5 12H22" />
             </svg>
           </button>
         </div>
@@ -241,15 +268,17 @@ function BottomNav() {
       {SHOW_HISTORY_CHAT_TABS && (
         <>
           <button onClick={() => navigate('/history')} style={navItem(false)}>
-            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
+            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
+                <polyline points="12 7 12 12 15 12" />
+                <path d="M18 21V15" />
+                <path d="M15 18l3-3 3 3" />
             </svg>
             <span>History</span>
           </button>
           <button onClick={() => navigate('/chat')} style={navItem(true)}>
-            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
             </svg>
             <span>Chat</span>
           </button>
@@ -295,38 +324,46 @@ const mobileCard = {
 
 const headerBar = {
   display: 'flex',
-  alignItems: 'center',
-  gap: 14,
+  alignItems: 'flex-start',
+  gap: 12,
   padding: '48px 20px 16px',
   background: '#FFFFFF',
-  borderBottom: '1px solid #F1F5F9',
   flexShrink: 0,
 };
 
 const backBtn = {
-  width: 32,
-  height: 32,
-  borderRadius: '50%',
+  background: 'none',
   border: 'none',
-  background: '#F1F5F9',
+  padding: 0,
+  cursor: 'pointer',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  cursor: 'pointer',
+  height: 24,
+  marginTop: 1,
   flexShrink: 0,
+};
+
+const headerTextGroup = {
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
 };
 
 const headerTitle = {
   fontSize: 19,
   fontWeight: 800,
   color: '#0F172A',
+  margin: 0,
+  lineHeight: '24px',
   letterSpacing: '-0.3px',
 };
 
 const headerSubtitle = {
   fontSize: 12,
   color: '#94A3B8',
-  marginTop: 2,
+  margin: '2px 0 0 0',
+  lineHeight: '16px',
 };
 
 const messageScroll = {
@@ -360,35 +397,35 @@ const userTime = {
 const aiRow = { display: 'flex', justifyContent: 'flex-start' };
 
 const aiCard = {
-  maxWidth: '86%',
+  width: '100%',
+  maxWidth: '88%',
   background: '#FFFFFF',
   border: '1px solid #F1F5F9',
-  borderRadius: '16px 16px 16px 4px',
-  padding: '14px 16px',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+  borderRadius: 20,
+  padding: '16px',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
 };
 
 const aiHeaderRow = {
   display: 'flex',
   alignItems: 'center',
-  gap: 6,
-  marginBottom: 8,
+  gap: 8,
+  marginBottom: 10,
 };
 
 const aiAvatar = {
-  width: 22,
-  height: 22,
+  width: 24,
+  height: 24,
   borderRadius: '50%',
-  background: '#EFF6FF',
+  background: '#1D5BB4',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  fontSize: 12,
 };
 
 const aiName = {
-  fontSize: 12,
-  fontWeight: 800,
+  fontSize: 13,
+  fontWeight: 700,
   color: '#1D5BB4',
 };
 
@@ -396,7 +433,7 @@ const aiDishRow = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
-  marginBottom: 6,
+  marginBottom: 8,
 };
 
 const aiDishName = {
@@ -416,33 +453,35 @@ const levelPill = {
 const aiText = {
   fontSize: 13.5,
   lineHeight: 1.55,
+  color: '#475569',
 };
 
 const noteBox = {
-  marginTop: 10,
-  background: '#FFFBEB',
-  border: '1px solid #FDE68A',
-  borderRadius: 10,
-  padding: '10px 12px',
+  marginTop: 12,
+  background: '#FFF7ED',
+  border: '1px solid #FFEDD5',
+  borderRadius: 12,
+  padding: '12px 14px',
 };
 
 const noteTitle = {
   fontSize: 12,
-  fontWeight: 800,
-  color: '#B45309',
+  fontWeight: 700,
+  color: '#EA580C',
   marginBottom: 4,
 };
 
 const noteText = {
-  fontSize: 12.5,
-  color: '#78350F',
+  fontSize: 12,
+  color: '#9A3412',
   lineHeight: 1.5,
 };
 
 const aiTime = {
   fontSize: 10,
-  color: '#CBD5E1',
-  marginTop: 8,
+  color: '#94A3B8',
+  marginTop: 10,
+  textAlign: 'right',
 };
 
 const inputBar = {
