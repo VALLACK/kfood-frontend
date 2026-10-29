@@ -5,6 +5,7 @@ import Login from './Login';
 import Profile from './Profile';
 import ScanPage from './ScanPage';
 import ResultPage from './ResultPage';
+import HistoryPage from './HistoryPage';
 import ChatPage from './ChatPage';
 import './App.css';
 import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
@@ -99,7 +100,7 @@ function Home() {
             <div style={shieldBadge}>
               <svg style={shieldIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <polyline points="9 11 12 14 22 4" />
+                <polyline points="8 12 11 14.5 16 9.5" />
               </svg>
             </div>
             <span style={logoText}>K-Food Safety</span>
@@ -200,61 +201,113 @@ function HomeBottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [selectedFeature, setSelectedFeature] = useState('History');
 
   const handleProtectedNav = (targetPath, featureName) => {
     const isGuest = localStorage.getItem('isGuest') === 'true';
 
     if (isGuest) {
-      alert(`${featureName} feature is available for signed-in users only.`);
+      setSelectedFeature(featureName);
+      setShowLoginModal(true);
       return;
     }
 
     navigate(targetPath);
   };
 
-  return (
-    <nav style={bottomNavStyle}>
-      <button onClick={() => navigate('/home')} style={navItem(currentPath === '/home')}>
-        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-        <span>Home</span>
-      </button>
+   return (
+    <>
+      <nav style={bottomNavStyle}>
+        {/* Home */}
+        <button onClick={() => navigate('/home')} style={navItem(true)}>
+          <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 10.5L12 3l9 7.5V20a1.5 1.5 0 0 1-1.5 1.5h-4.5v-6a1.5 1.5 0 0 0-1.5-1.5h-3a1.5 1.5 0 0 0-1.5 1.5v6H4.5A1.5 1.5 0 0 1 3 20v-9.5z" />
+          </svg>
+          <span>Home</span>
+        </button>
 
-      {SHOW_HISTORY_CHAT_TABS && (
-        <>
-          <button
-            onClick={() => handleProtectedNav('/history', 'History')}
-            style={navItem(currentPath === '/history')}
-          >
-            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            <span>History</span>
-          </button>
+        {SHOW_HISTORY_CHAT_TABS && (
+          <>
+            {/* History */}
+            <button
+              onClick={() => handleProtectedNav('/history', 'History')}
+              style={navItem(false)}
+            >
+              <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
+                <polyline points="12 7 12 12 15 12" />
+                <path d="M18 21V15" />
+                <path d="M15 18l3-3 3 3" />
+              </svg>
+              <span>History</span>
+            </button>
 
-          <button
-            onClick={() => handleProtectedNav('/chat', 'Chat')}
-            style={navItem(currentPath === '/chat')}
-          >
-            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span>Chat</span>
-          </button>
-        </>
+            {/* Chat */}
+            <button
+              onClick={() => handleProtectedNav('/chat', 'Chat')}
+              style={navItem(false)}
+            >
+              <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
+              </svg>
+              <span>Chat</span>
+            </button>
+          </>
+        )}
+
+        {/* Profile */}
+        <button onClick={() => navigate('/profile')} style={navItem(false)}>
+          <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span>Profile</span>
+        </button>
+      </nav>
+
+      {showLoginModal && (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <button
+              onClick={() => setShowLoginModal(false)}
+              style={modalCloseButton}
+              aria-label="Close"
+            >
+              ×
+            </button>
+
+            <div style={modalIcon}>
+              <svg width="30" height="30" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </div>
+
+            <h2 style={modalTitle}>Login Required</h2>
+
+            <p style={modalDescription}>
+              Sign in to access your {selectedFeature} features.
+            </p>
+
+            <button
+              onClick={() => navigate('/')}
+              style={modalLoginButton}
+            >
+              Log In
+            </button>
+
+            <button
+              onClick={() => setShowLoginModal(false)}
+              style={modalCancelButton}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
-
-      <button onClick={() => navigate('/profile')} style={navItem(currentPath === '/profile')}>
-        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
-        </svg>
-        <span>Profile</span>
-      </button>
-    </nav>
+    </>
   );
 }
 
@@ -267,6 +320,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/scan" element={<ScanPage />} />
         <Route path="/result" element={<ResultPage />} />
+        <Route path="/history" element={<HistoryPage />} />
         <Route path="/chat" element={<ChatPage />} />
       </Routes>
     </Router>
@@ -302,4 +356,89 @@ const redTag = { padding: '6px 14px', borderRadius: 20, border: '1px solid #FCA5
 const blueTag = { padding: '6px 14px', borderRadius: 20, border: '1px solid #1D5BB4', background: '#EFF6FF', color: '#1D5BB4', fontSize: 13, fontWeight: 600 };
 const bottomNavStyle = { marginTop: 'auto', height: 64, background: '#FFFFFF', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0 8px' };
 const navItem = (isActive) => ({ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: isActive ? '#1D5BB4' : '#94A3B8', fontSize: 11, fontWeight: isActive ? 700 : 500, cursor: 'pointer', padding: '4px 8px' });
-const navIcon = { width: 20, height: 20 };
+const navIcon = { width: 22, height: 22 };
+
+const modalOverlay = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(15, 23, 42, 0.55)',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 20,
+  zIndex: 9999,
+};
+
+const modalCard = {
+  position: 'relative',
+  width: '100%',
+  maxWidth: 320,
+  boxSizing: 'border-box',
+  padding: '32px 24px 24px',
+  background: '#FFFFFF',
+  borderRadius: 24,
+  textAlign: 'center',
+  boxShadow: '0 20px 50px rgba(0, 0, 0, 0.2)',
+};
+
+const modalCloseButton = {
+  position: 'absolute',
+  top: 10,
+  right: 14,
+  background: 'none',
+  border: 'none',
+  fontSize: 28,
+  color: '#94A3B8',
+  cursor: 'pointer',
+};
+
+const modalIcon = {
+  width: 64,
+  height: 64,
+  margin: '0 auto 18px',
+  borderRadius: 20,
+  background: '#EFF6FF',
+  color: '#1D5BB4',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const modalTitle = {
+  margin: '0 0 10px',
+  fontSize: 22,
+  fontWeight: 800,
+  color: '#0F172A',
+};
+
+const modalDescription = {
+  margin: '0 0 24px',
+  fontSize: 14,
+  lineHeight: 1.6,
+  color: '#64748B',
+};
+
+const modalLoginButton = {
+  width: '100%',
+  padding: 14,
+  border: 'none',
+  borderRadius: 12,
+  background: '#1D5BB4',
+  color: '#FFFFFF',
+  fontSize: 15,
+  fontWeight: 700,
+  cursor: 'pointer',
+};
+
+const modalCancelButton = {
+  width: '100%',
+  marginTop: 10,
+  padding: 13,
+  border: '1px solid #E2E8F0',
+  borderRadius: 12,
+  background: '#FFFFFF',
+  color: '#475569',
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: 'pointer',
+};

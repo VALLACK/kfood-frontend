@@ -9,6 +9,20 @@ async function authHeader() {
   return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
+function guestProfileBody() {
+  if (localStorage.getItem('isGuest') !== 'true') return {};
+  const guest = JSON.parse(localStorage.getItem('guestProfile') || 'null');
+  if (!guest) return {};
+  return {
+    profile: {
+      allergies: guest.allergies || [],
+      religious_diet: guest.religious_diet || null,
+      vegetarian_type: guest.vegetarian_type || null,
+      preferred_language: localStorage.getItem('appLanguage') || 'en',
+    },
+  };
+}
+
 function speakKo(text) {
   if (!('speechSynthesis' in window)) return;
   const u = new SpeechSynthesisUtterance(text);
@@ -37,6 +51,9 @@ export default function StaffQuestionCard({ item, question, onUpdated }) {
         },
         staff_answer: value,
         input_type: 'text',
+        // 게스트는 로그인 토큰이 없으므로 /analyze와 똑같이 프로필을 직접 보낸다.
+        // 빠지면 서버가 '제약 없는 사람' 기준으로 재판정해서 '예'를 눌러도 SAFE가 된다.
+        ...guestProfileBody(),
       }, { headers: await authHeader(), timeout: 60000 });
       onUpdated(res.data.result);
     } catch {
