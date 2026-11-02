@@ -76,7 +76,14 @@ export default function ScanPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       stopCamera();
-      navigate('/result', { state: { menus: res.data.menus, ocrText: res.data.text, fileName } });
+      navigate('/result', {
+        state: {
+          menus: res.data.menus,
+          ocrText: res.data.text,
+          fileName,
+          truncated: res.data.truncated === true,
+        },
+      });
     } catch (err) {
       setStatus('error');
       setError('Scan failed. Please try again.\n' + (err.message || ''));

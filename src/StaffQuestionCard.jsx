@@ -58,6 +58,7 @@ export default function StaffQuestionCard({ item, question, onUpdated }) {
       onUpdated(res.data.result);
     } catch {
       setFailed('Could not apply the answer. Please try again.');
+    } finally {
       setSending(false);
     }
   };
