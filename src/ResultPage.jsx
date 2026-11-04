@@ -16,18 +16,18 @@ const LEVEL_STYLE = {
 };
 
 const KIND_INFO = {
-  allergy:          { title: 'Allergy Hazard Detected', preset: 'Allergy' },
-  religious:        { title: 'Dietary Restriction Detected', preset: 'Religious Diet' },
-  religious_verify: { title: 'Certification Needed', preset: 'Certification' },
-  diet:             { title: 'Diet Conflict Detected', preset: 'Diet' },
+  allergy:          { title: 'Allergy Hazard Detected', possibleTitle: 'Possible Allergen — Check with Staff', preset: 'Allergy' },
+  religious:        { title: 'Dietary Restriction Detected', possibleTitle: 'Dietary Check Needed', preset: 'Religious Diet' },
+  religious_verify: { title: 'Certification Needed', possibleTitle: 'Certification Needed', preset: 'Certification' },
+  diet:             { title: 'Diet Conflict Detected', possibleTitle: 'Possible Diet Conflict — Check with Staff', preset: 'Diet' },
 };
 
 function groupReasons(reasons) {
-  // 같은 표시 라벨(예: shrimp·crab 태그가 둘 다 "Shellfish")은 한 박스로 합침
+  // 같은 종류·라벨·확정 여부인 사유만 묶어 가능성 있는 재료를 확정으로 표시하지 않는다.
   const map = new Map();
   for (const r of reasons) {
     if (!r.label) continue;
-    const key = `${r.kind}:${r.label}`;
+    const key = `${r.kind}:${r.label}:${r.certainty === 'confirmed' ? 'confirmed' : 'possible'}`;
     if (!map.has(key)) {
       map.set(key, { kind: r.kind, label: r.label, certainty: r.certainty, ingredients: [] });
     }
@@ -130,13 +130,18 @@ function ResultCard({ item, onUpdated }) {
         <div style={cardBody}>
           {groups.map((g, i) => {
             const info = KIND_INFO[g.kind] || KIND_INFO.allergy;
+            const isPossible = g.certainty !== 'confirmed';
             return (
               <div key={i} style={{ ...alertBox, background: style.bg, border: `1px solid ${style.border}` }}>
                 <div style={{ ...alertTitle, color: style.text }}>
-                  <span style={{ marginRight: 6 }}>⚠️</span>{info.title}
+                  <span style={{ marginRight: 6 }}>⚠️</span>{isPossible ? info.possibleTitle : info.title}
                 </div>
                 <div style={alertDesc}>
-                  Contains <strong>{g.label}</strong> ({g.ingredients.join(', ')}) which triggers your {g.label} {info.preset} preset.
+                  {isPossible ? (
+                    <>May contain <strong>{g.label}</strong> ({g.ingredients.join(', ')}). Please confirm with the staff before ordering.</>
+                  ) : (
+                    <>Contains <strong>{g.label}</strong> ({g.ingredients.join(', ')}) which triggers your {g.label} {info.preset} preset.</>
+                  )}
                 </div>
               </div>
             );
@@ -238,6 +243,7 @@ export default function ResultPage() {
 
   const menus = location.state?.menus;
   const ocrText = location.state?.ocrText;
+  const truncated = location.state?.truncated === true;
 
   useEffect(() => {
     // menus가 있으면 우선 사용 — /ocr이 이미 가격·상호명을 뺀 메뉴명만 정제해서 준 목록이라
@@ -331,6 +337,12 @@ export default function ResultPage() {
         </header>
 
         <div style={contentScroll}>
+          {truncated && (
+            <div style={noticeBox} role="status">
+              ⚠️ Only some menu items were recognized. These results may be incomplete. Please photograph the remaining items separately.
+            </div>
+          )}
+
           {results.length > 0 && (
             <div style={summaryRow}>
               {(['SAFE', 'CAUTION', 'WARNING']).map((level) => {
@@ -380,6 +392,7 @@ export default function ResultPage() {
 
 function BottomNav() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState('History');
 
@@ -399,7 +412,7 @@ function BottomNav() {
     <>
       <nav style={bottomNavStyle}>
         {/* Home */}
-        <button onClick={() => navigate('/home')} style={navItem(false)}>
+        <button onClick={() => navigate('/home')} aria-current={pathname === '/home' ? 'page' : undefined} style={navItem(pathname === '/home')}>
           <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 10.5L12 3l9 7.5V20a1.5 1.5 0 0 1-1.5 1.5h-4.5v-6a1.5 1.5 0 0 0-1.5-1.5h-3a1.5 1.5 0 0 0-1.5 1.5v6H4.5A1.5 1.5 0 0 1 3 20v-9.5z" />
           </svg>
@@ -411,7 +424,8 @@ function BottomNav() {
             {/* History */}
             <button
               onClick={() => handleProtectedNav('/history', 'History')}
-              style={navItem(true)}
+              aria-current={pathname === '/history' ? 'page' : undefined}
+              style={navItem(pathname === '/history')}
             >
               <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
@@ -425,7 +439,8 @@ function BottomNav() {
             {/* Chat */}
             <button
               onClick={() => handleProtectedNav('/chat', 'Chat')}
-              style={navItem(false)}
+              aria-current={pathname === '/chat' ? 'page' : undefined}
+              style={navItem(pathname === '/chat')}
             >
               <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
@@ -436,7 +451,7 @@ function BottomNav() {
         )}
 
         {/* Profile */}
-        <button onClick={() => navigate('/profile')} style={navItem(false)}>
+        <button onClick={() => navigate('/profile')} aria-current={pathname === '/profile' ? 'page' : undefined} style={navItem(pathname === '/profile')}>
           <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
