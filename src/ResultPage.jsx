@@ -2,8 +2,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { supabase } from './supabaseClient';
-import StaffQuestionCard from './StaffQuestionCard';
 import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
+import LoginRequiredModal from './components/LoginRequiredModal';
+import ResultCard from './components/ResultCard';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -15,223 +16,11 @@ const LEVEL_STYLE = {
   WARNING: { text: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
 };
 
-const KIND_INFO = {
-  allergy:          { title: 'Allergy Hazard Detected', possibleTitle: 'Possible Allergen — Check with Staff', preset: 'Allergy' },
-  religious:        { title: 'Dietary Restriction Detected', possibleTitle: 'Dietary Check Needed', preset: 'Religious Diet' },
-  religious_verify: { title: 'Certification Needed', possibleTitle: 'Certification Needed', preset: 'Certification' },
-  diet:             { title: 'Diet Conflict Detected', possibleTitle: 'Possible Diet Conflict — Check with Staff', preset: 'Diet' },
-};
 
-function groupReasons(reasons) {
-  // 같은 종류·라벨·확정 여부인 사유만 묶어 가능성 있는 재료를 확정으로 표시하지 않는다.
-  const map = new Map();
-  for (const r of reasons) {
-    if (!r.label) continue;
-    const key = `${r.kind}:${r.label}:${r.certainty === 'confirmed' ? 'confirmed' : 'possible'}`;
-    if (!map.has(key)) {
-      map.set(key, { kind: r.kind, label: r.label, certainty: r.certainty, ingredients: [] });
-    }
-    const g = map.get(key);
-    if (!g.ingredients.includes(r.ingredient)) g.ingredients.push(r.ingredient);
-    if (r.certainty === 'confirmed') g.certainty = 'confirmed';
-  }
-  return [...map.values()];
-}
 
-function renderBreakdown(ingredients, groups) {
-  const tagByName = new Map();
-  groups.forEach((g) => g.ingredients.forEach((name) => tagByName.set(name, g)));
 
-  const nodes = [];
-  let i = 0;
-  while (i < ingredients.length) {
-    const ing = ingredients[i];
-    const name = ing.name_translated || ing.name;
-    const group = tagByName.get(ing.name);
-    if (group) {
-      const runNames = [name];
-      let j = i + 1;
-      while (j < ingredients.length && tagByName.get(ingredients[j].name) === group) {
-        runNames.push(ingredients[j].name_translated || ingredients[j].name);
-        j++;
-      }
-      nodes.push(
-        <span key={i} style={{ color: LEVEL_STYLE.WARNING.text, fontWeight: 700 }}>
-          {runNames.join(', ')} ({group.label})
-        </span>
-      );
-      i = j;
-    } else {
-      nodes.push(<span key={i}>{name}</span>);
-      i++;
-    }
-  }
-  return nodes.reduce((acc, node, idx) => {
-    if (idx > 0) acc.push(', ');
-    acc.push(node);
-    return acc;
-  }, []);
-}
 
-function ResultCard({ item, onUpdated }) {
-  const risk = item.risk || {};
-  const level = risk.level || 'SAFE';
-  const style = LEVEL_STYLE[level];
-  const [open, setOpen] = useState(level === 'WARNING');
 
-  const ingredients = item.ingredients || [];
-  const groups = groupReasons([...(risk.confirmed_reasons || []), ...(risk.possible_reasons || [])]);
-  const staffQuestions = risk.staff_questions || [];
-  const displayName = item.menu_translated || item.menu;
-
-  // 성분 비율이 있는 성분만 표시
-  const withRatio = ingredients.filter(
-    (i) => typeof i.ratio_percent === 'number'
-  );
-
-  // 실제 데이터인지 AI 추정인지 확인
-  const isRealRatio = ingredients.some(
-    (i) => i.ratio_source === 'menuzen'
-  );
-
-  // 판정 근거 표시
-  const sourceLabel = {
-    menuzen: 'Public Data (MenuZen)',
-    menu_base: 'Internal Menu Database',
-    menu_board: 'Menu Board',
-    ai: 'AI Inference',
-  };
-
-  return (
-    <div style={{ ...cardBase, ...(level === 'WARNING' ? { border: `2px solid ${style.border}` } : {}) }}>
-      <button style={cardHeaderBtn} onClick={() => setOpen((v) => !v)}>
-        <div style={{ textAlign: 'left' }}>
-          <div style={cardMenuName}>{item.menu}</div>
-          {displayName !== item.menu && <div style={cardMenuTranslated}>{displayName}</div>}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ ...levelPill, color: style.text, background: style.bg, border: `1px solid ${style.border}` }}>
-            {level}
-          </span>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#94A3B8" strokeWidth="2.5"
-               style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </div>
-      </button>
-
-      {!open && staffQuestions.length > 0 && (
-        <button style={staffHintBtn} onClick={() => setOpen(true)}>
-          💬 Ask the staff ({staffQuestions.length}) · Needs confirmation
-        </button>
-      )}
-
-      {open && (
-        <div style={cardBody}>
-          {groups.map((g, i) => {
-            const info = KIND_INFO[g.kind] || KIND_INFO.allergy;
-            const isPossible = g.certainty !== 'confirmed';
-            return (
-              <div key={i} style={{ ...alertBox, background: style.bg, border: `1px solid ${style.border}` }}>
-                <div style={{ ...alertTitle, color: style.text }}>
-                  <span style={{ marginRight: 6 }}>⚠️</span>{isPossible ? info.possibleTitle : info.title}
-                </div>
-                <div style={alertDesc}>
-                  {isPossible ? (
-                    <>May contain <strong>{g.label}</strong> ({g.ingredients.join(', ')}). Please confirm with the staff before ordering.</>
-                  ) : (
-                    <>Contains <strong>{g.label}</strong> ({g.ingredients.join(', ')}) which triggers your {g.label} {info.preset} preset.</>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {/* 성분 비율 */}
-          {withRatio.length > 0 && (
-            <div style={{ marginTop: groups.length > 0 ? 12 : 0 }}>
-              <div style={breakdownLabel}>
-                INGREDIENT BREAKDOWN{' '}
-                {isRealRatio
-                  ? '(Based on Actual Weight)'
-                  : '(AI Estimated)'}
-              </div>
-
-              <div style={ratioList}>
-                {withRatio.map((ing, i) => {
-                  const name =
-                    ing.name_translated || ing.name;
-
-                  return (
-                    <div key={i} style={ratioItem}>
-                      <div style={ratioHeader}>
-                        <span>{name}</span>
-                        <strong>{ing.ratio_percent}%</strong>
-                      </div>
-
-                      <div style={ratioBar}>
-                        <div
-                          style={{
-                            ...ratioBarFill,
-                            width: `${Math.min(
-                              Math.max(ing.ratio_percent, 0),
-                              100
-                            )}%`
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 기존 성분 표시 */}
-          {ingredients.length > 0 && withRatio.length === 0 && (
-            <div
-              style={{
-                marginTop: groups.length > 0 ? 12 : 0
-              }}
-            >
-              <div style={breakdownLabel}>
-                INGREDIENT BREAKDOWN
-              </div>
-
-              <div style={breakdownText}>
-                {renderBreakdown(ingredients, groups)}.
-              </div>
-            </div>
-          )}
-
-          {/* 판정 근거 */}
-          {item.data_source && (
-            <div style={reasoningBox}>
-              <div style={breakdownLabel}>REASONING</div>
-
-              <div style={reasoningText}>
-                {sourceLabel[item.data_source] ||
-                  item.data_source}
-
-                {item.family?.length > 1 &&
-                  ` · Compared with ${item.family.length} similar recipes`}
-              </div>
-            </div>
-          )}
-
-          {staffQuestions.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={breakdownLabel}>ASK THE STAFF</div>
-              {staffQuestions.map((q, i) => (
-                <StaffQuestionCard key={`${q.kind}-${q.ingredient}-${i}`} item={item} question={q} onUpdated={onUpdated} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function ResultPage() {
   const location  = useLocation();
@@ -460,47 +249,12 @@ function BottomNav() {
         </button>
       </nav>
 
-      {showLoginModal && (
-        <div style={modalOverlay}>
-          <div style={modalCard}>
-            <button
-              onClick={() => setShowLoginModal(false)}
-              style={modalCloseButton}
-              aria-label="Close"
-            >
-              ×
-            </button>
-
-            <div style={modalIcon}>
-              <svg width="30" height="30" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            </div>
-
-            <h2 style={modalTitle}>Login Required</h2>
-
-            <p style={modalDescription}>
-              Sign in to access your {selectedFeature} features.
-            </p>
-
-            <button
-              onClick={() => navigate('/')}
-              style={modalLoginButton}
-            >
-              Log In
-            </button>
-
-            <button
-              onClick={() => setShowLoginModal(false)}
-              style={modalCancelButton}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <LoginRequiredModal
+        isOpen={showLoginModal}
+        selectedFeature={selectedFeature}
+        onClose={() => setShowLoginModal(false)}
+        onLogin={() => navigate('/')}
+      />
     </>
   );
 }
@@ -754,90 +508,4 @@ const reasoningText = {
   fontSize: 12,
   color: '#64748B',
   lineHeight: 1.5,
-};
-
-
-const modalOverlay = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(15, 23, 42, 0.55)',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  padding: 20,
-  zIndex: 9999,
-};
-
-const modalCard = {
-  position: 'relative',
-  width: '100%',
-  maxWidth: 320,
-  boxSizing: 'border-box',
-  padding: '32px 24px 24px',
-  background: '#FFFFFF',
-  borderRadius: 24,
-  textAlign: 'center',
-  boxShadow: '0 20px 50px rgba(0, 0, 0, 0.2)',
-};
-
-const modalCloseButton = {
-  position: 'absolute',
-  top: 10,
-  right: 14,
-  background: 'none',
-  border: 'none',
-  fontSize: 28,
-  color: '#94A3B8',
-  cursor: 'pointer',
-};
-
-const modalIcon = {
-  width: 64,
-  height: 64,
-  margin: '0 auto 18px',
-  borderRadius: 20,
-  background: '#EFF6FF',
-  color: '#1D5BB4',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
-
-const modalTitle = {
-  margin: '0 0 10px',
-  fontSize: 22,
-  fontWeight: 800,
-  color: '#0F172A',
-};
-
-const modalDescription = {
-  margin: '0 0 24px',
-  fontSize: 14,
-  lineHeight: 1.6,
-  color: '#64748B',
-};
-
-const modalLoginButton = {
-  width: '100%',
-  padding: 14,
-  border: 'none',
-  borderRadius: 12,
-  background: '#1D5BB4',
-  color: '#FFFFFF',
-  fontSize: 15,
-  fontWeight: 700,
-  cursor: 'pointer',
-};
-
-const modalCancelButton = {
-  width: '100%',
-  marginTop: 10,
-  padding: 13,
-  border: '1px solid #E2E8F0',
-  borderRadius: 12,
-  background: '#FFFFFF',
-  color: '#475569',
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: 'pointer',
 };
