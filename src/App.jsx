@@ -3,7 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation 
 import { supabase } from './supabaseClient';
 import Login from './Login';
 import Profile from './Profile';
+import ProfileCardPage from './ProfileCardPage';
 import ScanPage from './ScanPage';
+import MenuReviewPage from './MenuReviewPage';
 import ResultPage from './ResultPage';
 import HistoryPage from './HistoryPage';
 import ChatPage from './ChatPage';
@@ -14,6 +16,7 @@ import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
 
 function Home() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [profile, setProfile] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState('');
   const [loading, setLoading] = useState(true);
@@ -209,6 +212,7 @@ function Home() {
                 )}
               </div>
             </div>
+            <button type="button" className="dietary-card-entry" style={{ marginTop: 14 }} onClick={() => navigate('/profile/card', { state: { cardBackground: location } })}>Show my dietary card</button>
           </section>
         </main>
 
@@ -331,23 +335,47 @@ function HomeBottomNav() {
   );
 }
 
-function App() {
+
+function AppRoutes() {
+  const location = useLocation();
+  const background = location.state?.cardBackground;
+
+  const showingCard =
+    location.pathname === '/profile/card' &&
+    (
+      ['/home', '/profile', '/result'].includes(background?.pathname) ||
+      background?.pathname?.startsWith('/restaurant/')
+    );
+
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/scan" element={<ScanPage />} />
-        <Route path="/result" element={<ResultPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/chat" element={<ChatPage />} />
-        {/* 식당 탐색 & 상세 페이지 라우트 추가 */}
-        <Route path="/explore" element={<ExplorePage />} />
-        <Route path="/restaurant/:id" element={<RestaurantDetailPage />} />
-      </Routes>
-    </Router>
+    <>
+      {/* 원래 화면을 유지해 돌아왔을 때 분석이 다시 실행되지 않도록 함 */}
+      <div hidden={showingCard}>
+        <Routes location={showingCard ? background : location}>
+          <Route path="/" element={<Login />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/profile/card" element={<ProfileCardPage />} />
+          <Route path="/scan" element={<ScanPage />} />
+          <Route path="/menu-review" element={<MenuReviewPage />} />
+          <Route path="/result" element={<ResultPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+
+          {/* PR #15: 식당 탐색 및 상세 페이지 */}
+          <Route path="/explore" element={<ExplorePage />} />
+          <Route path="/restaurant/:id" element={<RestaurantDetailPage />} />
+        </Routes>
+      </div>
+
+      {showingCard && <ProfileCardPage />}
+    </>
   );
+}
+
+
+function App() {
+  return <Router><AppRoutes /></Router>;
 }
 
 export default App;

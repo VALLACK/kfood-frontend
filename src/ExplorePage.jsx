@@ -48,9 +48,14 @@ export default function ExplorePage() {
 
       if (isGuest) {
         const savedGuestData = localStorage.getItem('guestProfile');
-        if (savedGuestData) {
-          body.profile = JSON.parse(savedGuestData);
-        }
+        const guestProfile = savedGuestData
+          ? JSON.parse(savedGuestData)
+          : {};
+
+        body.profile = {
+          ...guestProfile,
+          preferred_language: localStorage.getItem('appLanguage') || 'en',
+        };
       } else {
         const {
           data: { session },
@@ -197,8 +202,7 @@ export default function ExplorePage() {
             {!isGuest && (
               <div>
                 <h2 style={listTitle}>
-                  Top {total} restaurants matching your dietary needs
-                </h2>
+                  Top {restaurants.length} restaurants matching your dietary needs                </h2>
                 <p style={listSubtitle}>
                   Selected by edible menu availability, then ranked by Google rating.
                 </p>

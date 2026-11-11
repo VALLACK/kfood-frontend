@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { supabase } from './supabaseClient';
 import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
@@ -16,30 +16,29 @@ const LEVEL_STYLE = {
   WARNING: { text: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
 };
 
-
-
-
-
-
-
 export default function ResultPage() {
   const location  = useLocation();
   const navigate  = useNavigate();
-  const [results, setResults]   = useState([]);
+  const [results, setResults]   = useState(() => location.state?.analysisSnapshot?.results || []);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
-  const [profileApplied, setProfileApplied] = useState(true);
+  const [profileApplied, setProfileApplied] = useState(() => location.state?.analysisSnapshot?.profileApplied ?? true);
+  const analysisStarted = useRef(false);
 
   const menus = location.state?.menus;
   const ocrText = location.state?.ocrText;
   const truncated = location.state?.truncated === true;
 
   useEffect(() => {
-    // menus가 있으면 우선 사용 — /ocr이 이미 가격·상호명을 뺀 메뉴명만 정제해서 준 목록이라
+    // React StrictMode must not submit the same analysis twice on mount.
+    if (analysisStarted.current) return;
+    analysisStarted.current = true;
+    if (location.state?.analysisSnapshot) return;
+    // 메뉴 확인 화면에서 확정한 목록을 우선 사용한다.
     // ocr_text를 그대로 보내 서버가 줄 단위로 재파싱(가격까지 메뉴명에 섞임)하는 것보다 정확함
     if (menus && menus.length > 0) {
       fetchAnalysis({ menus });
-    } else if (ocrText) {
+    } else if (!location.state?.menusReviewed && ocrText) {
       fetchAnalysis({ ocr_text: ocrText });
     }
   }, []);
@@ -126,6 +125,7 @@ export default function ResultPage() {
         </header>
 
         <div style={contentScroll}>
+          <button type="button" className="dietary-card-entry" style={{ marginBottom: 16 }} onClick={() => navigate('/profile/card', { state: { cardBackground: { ...location, state: { ...location.state, ...(results.length > 0 ? { analysisSnapshot: { results, profileApplied } } : {}) } } } })}>Show my dietary card</button>
           {truncated && (
             <div style={noticeBox} role="status">
               ⚠️ Only some menu items were recognized. These results may be incomplete. Please photograph the remaining items separately.

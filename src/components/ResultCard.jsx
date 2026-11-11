@@ -246,11 +246,20 @@ export default function ResultCard({
                 </div>
 
                 <div style={alertDesc}>
-                  {isPossible ? (
+                  {group.kind === 'religious_verify' ? (
+                    <>
+                      {isPossible ? 'May contain ' : 'Contains '}
+                      <strong>{group.label}</strong> ({group.ingredients.join(', ')}).
+                      {' Certification status has not been verified for your religious diet.'}
+                      {level === 'CAUTION' &&
+                        ' Please confirm certification with the staff before ordering.'}
+                    </>
+                  ) : isPossible ? (
                     <>
                       May contain <strong>{group.label}</strong>{' '}
-                      ({group.ingredients.join(', ')}). Please confirm
-                      with the staff before ordering.
+                      ({group.ingredients.join(', ')}).
+                      {level === 'CAUTION' &&
+                        ' Please confirm with the staff before ordering.'}
                     </>
                   ) : (
                     <>

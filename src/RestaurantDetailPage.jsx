@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import ResultCard from './components/ResultCard';
 
@@ -8,6 +8,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export default function RestaurantDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,9 +24,17 @@ export default function RestaurantDetailPage() {
 
       if (isGuest) {
         const savedGuestData = localStorage.getItem('guestProfile');
-        if (savedGuestData) {
-          body.profile = JSON.parse(savedGuestData);
-        }
+        const guestProfile = savedGuestData
+          ? JSON.parse(savedGuestData)
+          : {};
+
+        body.profile = {
+          ...guestProfile,
+          preferred_language:
+            localStorage.getItem('appLanguage') ||
+            guestProfile.preferred_language ||
+            'en',
+        };
       } else {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token) {
@@ -171,7 +180,14 @@ export default function RestaurantDetailPage() {
           </div>
 
           {/* 2. 가게 도착 시 직원에게 보여주는 카드 이동 버튼 */}
-          <button onClick={() => navigate(`/restaurants/${id}/staff-card`)} style={staffCardBtn}>
+          <button
+            onClick={() =>
+              navigate('/profile/card', {
+                state: { cardBackground: location },
+              })
+            }
+            style={staffCardBtn}
+          >
             Show my card to the staff
           </button>
 

@@ -54,11 +54,12 @@ function Login() {
   // 게스트 진입 (프로필 및 언어 기록 초기화)
   const handleGuestLogin = () => {
     setGuestLoading(true);
-    
-    // 이전 게스트 데이터 및 언어 저장값 삭제
+
     localStorage.removeItem('guestProfile');
-    localStorage.removeItem('appLanguage'); // 👈 추가된 부분 (기본 언어 영어로 리셋)
-    
+
+    // 게스트 로그인 시 기본 언어를 영어로 설정
+    localStorage.setItem('appLanguage', 'en');
+
     localStorage.setItem('isGuest', 'true');
     navigate('/home');
   };
