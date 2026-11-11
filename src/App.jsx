@@ -9,6 +9,8 @@ import MenuReviewPage from './MenuReviewPage';
 import ResultPage from './ResultPage';
 import HistoryPage from './HistoryPage';
 import ChatPage from './ChatPage';
+import ExplorePage from './ExplorePage'; // 식당 검색 목록 (SCR-12)
+import RestaurantDetailPage from './RestaurantDetailPage'; // 식당 상세 (SCR-13)
 import './App.css';
 import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
 
@@ -136,7 +138,26 @@ function Home() {
             <span style={scanBtnText}>Scan Menu</span>
           </section>
 
-          {/* 프로필 태그 영역 (게스트 모드에서도 동적 태그 렌더링) */}
+          {/* [SCR-04 신규 추가] 식당 찾기 입구 카드 */}
+          <section style={exploreCard} onClick={() => navigate('/explore')}>
+            <div style={exploreLeft}>
+              <div style={exploreIconWrapper}>
+                {/* 가게 아이콘 SVG */}
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D5BB4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l1-5h16l1 5" />
+                  <path d="M3 11c0 1.66 1.34 3 3 3s3-1.34 3-3c0 1.66 1.34 3 3 3s3-1.34 3-3c0 1.66 1.34 3 3 3s3-1.34 3-3" />
+                  <path d="M4 14v6a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6" />
+                </svg>
+              </div>
+              <div>
+                <h3 style={exploreTitle}>Explore restaurants</h3>
+                <p style={exploreDesc}>Before you go, see which menus fit your profile.</p>
+              </div>
+            </div>
+            <span style={exploreArrow}>&gt;</span>
+          </section>
+
+          {/* 프로필 태그 영역 */}
           <section style={filterSection}>
             <div style={filterHeader}>
               <h2 style={filterTitle}>My Dietary Filter Profile</h2>
@@ -220,11 +241,11 @@ function HomeBottomNav() {
     navigate(targetPath);
   };
 
-   return (
+  return (
     <>
       <nav style={bottomNavStyle}>
         {/* Home */}
-        <button onClick={() => navigate('/home')} style={navItem(true)}>
+        <button onClick={() => navigate('/home')} style={navItem(currentPath === '/home')}>
           <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 10.5L12 3l9 7.5V20a1.5 1.5 0 0 1-1.5 1.5h-4.5v-6a1.5 1.5 0 0 0-1.5-1.5h-3a1.5 1.5 0 0 0-1.5 1.5v6H4.5A1.5 1.5 0 0 1 3 20v-9.5z" />
           </svg>
@@ -236,7 +257,7 @@ function HomeBottomNav() {
             {/* History */}
             <button
               onClick={() => handleProtectedNav('/history', 'History')}
-              style={navItem(false)}
+              style={navItem(currentPath === '/history')}
             >
               <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
@@ -250,7 +271,7 @@ function HomeBottomNav() {
             {/* Chat */}
             <button
               onClick={() => handleProtectedNav('/chat', 'Chat')}
-              style={navItem(false)}
+              style={navItem(currentPath === '/chat')}
             >
               <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
@@ -261,7 +282,7 @@ function HomeBottomNav() {
         )}
 
         {/* Profile */}
-        <button onClick={() => navigate('/profile')} style={navItem(false)}>
+        <button onClick={() => navigate('/profile')} style={navItem(currentPath === '/profile')}>
           <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
@@ -282,8 +303,7 @@ function HomeBottomNav() {
             </button>
 
             <div style={modalIcon}>
-              <svg width="30" height="30" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="11" width="18" height="11" rx="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
@@ -315,14 +335,21 @@ function HomeBottomNav() {
   );
 }
 
+
 function AppRoutes() {
   const location = useLocation();
   const background = location.state?.cardBackground;
-  const showingCard = location.pathname === '/profile/card'
-    && ['/home', '/profile', '/result'].includes(background?.pathname);
+
+  const showingCard =
+    location.pathname === '/profile/card' &&
+    (
+      ['/home', '/profile', '/result'].includes(background?.pathname) ||
+      background?.pathname?.startsWith('/restaurant/')
+    );
+
   return (
     <>
-      {/* Keep the originating screen mounted: returning must not re-run analysis. */}
+      {/* 원래 화면을 유지해 돌아왔을 때 분석이 다시 실행되지 않도록 함 */}
       <div hidden={showingCard}>
         <Routes location={showingCard ? background : location}>
           <Route path="/" element={<Login />} />
@@ -334,12 +361,18 @@ function AppRoutes() {
           <Route path="/result" element={<ResultPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/chat" element={<ChatPage />} />
+
+          {/* PR #15: 식당 탐색 및 상세 페이지 */}
+          <Route path="/explore" element={<ExplorePage />} />
+          <Route path="/restaurant/:id" element={<RestaurantDetailPage />} />
         </Routes>
       </div>
+
       {showingCard && <ProfileCardPage />}
     </>
   );
 }
+
 
 function App() {
   return <Router><AppRoutes /></Router>;
@@ -356,17 +389,70 @@ const shieldBadge = { width: 32, height: 32, borderRadius: 10, background: '#1D5
 const shieldIcon = { width: 18, height: 18, color: '#FFFFFF' };
 const logoText = { fontSize: 18, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.3px' };
 const avatarImg = { width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' };
-const mainContent = { flex: 1, padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: 20 };
-const scanCard = { background: '#FFFFFF', borderRadius: 24, padding: '28px 20px 24px', textAlign: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center' };
+const mainContent = { flex: 1, padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: 16 };
+const scanCard = { background: '#FFFFFF', borderRadius: 24, padding: '24px 20px 20px', textAlign: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center' };
 const scanTitle = { fontSize: 22, fontWeight: 800, color: '#0F172A', margin: '0 0 8px 0', letterSpacing: '-0.3px' };
 const scanDesc = { fontSize: 13, color: '#64748B', lineHeight: 1.45, margin: '0 0 20px 0', maxWidth: 280 };
-const cameraCircleBtn = { width: 100, height: 100, borderRadius: '50%', background: '#1D5BB4', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 12, boxShadow: '0 8px 20px rgba(29, 91, 180, 0.3)' };
-const cameraIcon = { width: 44, height: 44, color: '#FFFFFF' };
-const scanBtnText = { fontSize: 16, fontWeight: 700, color: '#1D5BB4' };
+const cameraCircleBtn = { width: 90, height: 90, borderRadius: '50%', background: '#1D5BB4', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 10, boxShadow: '0 8px 20px rgba(29, 91, 180, 0.3)' };
+const cameraIcon = { width: 40, height: 40, color: '#FFFFFF' };
+const scanBtnText = { fontSize: 15, fontWeight: 700, color: '#1D5BB4' };
+
+/* [신규 추가] 식당 찾기 카드 스타일 */
+const exploreCard = {
+  background: '#EFF6FF', // 연한 푸른빛 배경
+  borderRadius: 20,
+  padding: '16px 20px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  border: '1px solid #DBEAFE', // 은은한 파란 테두리
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+};
+
+const exploreLeft = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 16,
+};
+
+const exploreIconWrapper = {
+  width: 48,
+  height: 48,
+  borderRadius: 14,
+  background: '#FFFFFF', // 아이콘 뒤 흰색 라운드 박스
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
+  flexShrink: 0,
+};
+
+const exploreTitle = {
+  fontSize: 16,
+  fontWeight: 700,
+  color: '#1E293B',
+  margin: '0 0 4px 0',
+  letterSpacing: '-0.2px',
+};
+
+const exploreDesc = {
+  fontSize: 13,
+  color: '#64748B',
+  lineHeight: 1.35,
+  margin: 0,
+};
+
+const exploreArrow = {
+  fontSize: 16,
+  fontWeight: 700,
+  color: '#1D5BB4', // 파란색 셰브론
+  marginLeft: 8,
+};
 const filterSection = { display: 'flex', flexDirection: 'column', gap: 10 };
 const filterHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' };
-const filterTitle = { fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 };
-const editLink = { fontSize: 14, fontWeight: 600, color: '#1D5BB4', textDecoration: 'none' };
+const filterTitle = { fontSize: 15, fontWeight: 700, color: '#0F172A', margin: 0 };
+const editLink = { fontSize: 13, fontWeight: 600, color: '#1D5BB4', textDecoration: 'none' };
 const filterCard = { background: '#FFFFFF', borderRadius: 16, padding: '16px', border: '1px solid #F1F5F9', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' };
 const filterCardDesc = { fontSize: 12, color: '#64748B', margin: '0 0 12px 0', lineHeight: 1.4 };
 const tagRow = { display: 'flex', gap: 8, flexWrap: 'wrap' };
@@ -376,87 +462,11 @@ const bottomNavStyle = { marginTop: 'auto', height: 64, background: '#FFFFFF', b
 const navItem = (isActive) => ({ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: isActive ? '#1D5BB4' : '#94A3B8', fontSize: 11, fontWeight: isActive ? 700 : 500, cursor: 'pointer', padding: '4px 8px' });
 const navIcon = { width: 22, height: 22 };
 
-const modalOverlay = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(15, 23, 42, 0.55)',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  padding: 20,
-  zIndex: 9999,
-};
-
-const modalCard = {
-  position: 'relative',
-  width: '100%',
-  maxWidth: 320,
-  boxSizing: 'border-box',
-  padding: '32px 24px 24px',
-  background: '#FFFFFF',
-  borderRadius: 24,
-  textAlign: 'center',
-  boxShadow: '0 20px 50px rgba(0, 0, 0, 0.2)',
-};
-
-const modalCloseButton = {
-  position: 'absolute',
-  top: 10,
-  right: 14,
-  background: 'none',
-  border: 'none',
-  fontSize: 28,
-  color: '#94A3B8',
-  cursor: 'pointer',
-};
-
-const modalIcon = {
-  width: 64,
-  height: 64,
-  margin: '0 auto 18px',
-  borderRadius: 20,
-  background: '#EFF6FF',
-  color: '#1D5BB4',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
-
-const modalTitle = {
-  margin: '0 0 10px',
-  fontSize: 22,
-  fontWeight: 800,
-  color: '#0F172A',
-};
-
-const modalDescription = {
-  margin: '0 0 24px',
-  fontSize: 14,
-  lineHeight: 1.6,
-  color: '#64748B',
-};
-
-const modalLoginButton = {
-  width: '100%',
-  padding: 14,
-  border: 'none',
-  borderRadius: 12,
-  background: '#1D5BB4',
-  color: '#FFFFFF',
-  fontSize: 15,
-  fontWeight: 700,
-  cursor: 'pointer',
-};
-
-const modalCancelButton = {
-  width: '100%',
-  marginTop: 10,
-  padding: 13,
-  border: '1px solid #E2E8F0',
-  borderRadius: 12,
-  background: '#FFFFFF',
-  color: '#475569',
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: 'pointer',
-};
+const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20, zIndex: 9999 };
+const modalCard = { position: 'relative', width: '100%', maxWidth: 320, boxSizing: 'border-box', padding: '32px 24px 24px', background: '#FFFFFF', borderRadius: 24, textAlign: 'center', boxShadow: '0 20px 50px rgba(0, 0, 0, 0.2)' };
+const modalCloseButton = { position: 'absolute', top: 10, right: 14, background: 'none', border: 'none', fontSize: 28, color: '#94A3B8', cursor: 'pointer' };
+const modalIcon = { width: 64, height: 64, margin: '0 auto 18px', borderRadius: 20, background: '#EFF6FF', color: '#1D5BB4', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const modalTitle = { margin: '0 0 10px', fontSize: 22, fontWeight: 800, color: '#0F172A' };
+const modalDescription = { margin: '0 0 24px', fontSize: 14, lineHeight: 1.6, color: '#64748B' };
+const modalLoginButton = { width: '100%', padding: 14, border: 'none', borderRadius: 12, background: '#1D5BB4', color: '#FFFFFF', fontSize: 15, fontWeight: 700, cursor: 'pointer' };
+const modalCancelButton = { width: '100%', marginTop: 10, padding: 13, border: '1px solid #E2E8F0', borderRadius: 12, background: '#FFFFFF', color: '#475569', fontSize: 14, fontWeight: 600, cursor: 'pointer' };
