@@ -5,6 +5,7 @@ import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
 
 const Profile = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // 언어 상태 (localStorage에서 읽어옴, 기본값 'en')
   const [selectedLang, setSelectedLang] = useState(() => {
@@ -334,6 +335,8 @@ const Profile = () => {
           </section>
 
           <div style={actionButtonGroup}>
+            <button type="button" className="dietary-card-entry" disabled={loading || isSaving} onClick={() => navigate('/profile/card', { state: { cardBackground: location } })}>Show my dietary card</button>
+            <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 8px', textAlign: 'center' }}>Uses your saved profile. Save changes first to update this card.</p>
             <div 
               onClick={isSaving ? null : handleComplete} 
               style={{

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { prepareMenuImage } from './prepareMenuImage';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -10,14 +11,18 @@ export default function ScanPage() {
   const canvasRef = useRef(null);
   const galleryInputRef = useRef(null);
   const streamRef = useRef(null);
+  const busyRef = useRef(false);
+  const requestRef = useRef(null);
+  const previewUrlRef = useRef(null);
 
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [torchOn, setTorchOn] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [capturedPreview, setCapturedPreview] = useState(null);
-  const [status, setStatus] = useState(''); // '' | 'scanning' | 'error'
+  const [status, setStatus] = useState(''); // '' | 'preparing' | 'scanning' | 'error'
   const [error, setError] = useState('');
+  const busy = status === 'preparing' || status === 'scanning';
 
   // 카메라 스트림 시작 (지원 안 되거나 거부되면 갤러리 선택으로 대체)
   useEffect(() => {
@@ -47,6 +52,8 @@ export default function ScanPage() {
     })();
     return () => {
       active = false;
+      requestRef.current?.abort();
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
@@ -66,17 +73,29 @@ export default function ScanPage() {
     }
   };
 
-  const runScan = async (blob, fileName) => {
-    setStatus('scanning');
+  const runScan = async (source, fileName) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setStatus('preparing');
     setError('');
     try {
+      const prepared = await prepareMenuImage(source, fileName);
+      if (controller.signal.aborted) return;
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = URL.createObjectURL(prepared.blob);
+      setCapturedPreview(previewUrlRef.current);
+      setStatus('scanning');
       const formData = new FormData();
-      formData.append('file', blob, fileName);
+      formData.append('file', prepared.blob, prepared.fileName);
       const res = await axios.post(`${API_URL}/ocr`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        signal: controller.signal,
       });
+      if (controller.signal.aborted) return;
       stopCamera();
-      navigate('/result', {
+      navigate('/menu-review', {
+        replace: true,
         state: {
           menus: res.data.menus,
           ocrText: res.data.text,
@@ -85,37 +104,47 @@ export default function ScanPage() {
         },
       });
     } catch (err) {
+      if (controller.signal.aborted) return;
       setStatus('error');
-      setError('Scan failed. Please try again.\n' + (err.message || ''));
+      setError(err.response?.status === 413
+        ? 'This photo is too large for the server. Please photograph the menu in sections.'
+        : err.isAxiosError
+          ? 'Scan failed. Please check your connection and try again.'
+          : err.message || 'This photo could not be prepared. Please choose another image.');
+    } finally {
+      busyRef.current = false;
     }
   };
 
   const handleCapture = () => {
     const video = videoRef.current;
-    if (!video || !cameraReady || status === 'scanning') return;
+    if (!video || !cameraReady || busyRef.current) return;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    setCapturedPreview(canvas.toDataURL('image/jpeg', 0.9));
-    canvas.toBlob((blob) => {
-      if (blob) runScan(blob, 'capture.jpg');
-    }, 'image/jpeg', 0.9);
+    const context = canvas.getContext('2d');
+    if (!context || !canvas.width || !canvas.height) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Encode only once, in the same preparation path used for file uploads.
+    runScan(canvas, 'capture.jpg');
   };
 
   const handleGalleryFile = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    setCapturedPreview(URL.createObjectURL(f));
-    runScan(f, f.name);
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file || busyRef.current) return;
+    runScan(file, file.name);
   };
 
   const handleClose = () => {
+    requestRef.current?.abort();
     stopCamera();
     navigate('/home');
   };
 
   const handleRetry = () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
     setCapturedPreview(null);
     setStatus('');
     setError('');
@@ -149,7 +178,10 @@ export default function ScanPage() {
         {/* 카메라/뷰파인더 영역 */}
         <div style={viewfinderWrap}>
           {!capturedPreview ? (
-            <video ref={videoRef} autoPlay playsInline muted style={videoStyle} />
+            <video ref={(video) => {
+              videoRef.current = video;
+              if (video && streamRef.current) video.srcObject = streamRef.current;
+            }} autoPlay playsInline muted style={videoStyle} />
           ) : (
             <img src={capturedPreview} alt="Captured menu" style={videoStyle} />
           )}
@@ -159,10 +191,10 @@ export default function ScanPage() {
 
           {cameraError && !capturedPreview && <div style={cameraErrorBox}>{cameraError}</div>}
 
-          {status === 'scanning' && (
-            <div style={scanningCard}>
+          {busy && (
+            <div style={scanningCard} role="status" aria-live="polite">
               <div style={spinner} />
-              <div style={scanningText}>Scanning ingredients...</div>
+              <div style={scanningText}>{status === 'preparing' ? 'Preparing photo...' : 'Reading menu items...'}</div>
             </div>
           )}
 
@@ -178,7 +210,7 @@ export default function ScanPage() {
 
         {/* 하단 컨트롤 */}
         <div style={bottomBar}>
-          <button onClick={() => galleryInputRef.current?.click()} style={sideIconBtn} aria-label="Choose from gallery">
+          <button onClick={() => galleryInputRef.current?.click()} disabled={busy} style={sideIconBtn} aria-label="Choose from gallery">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" strokeWidth="2">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <circle cx="8.5" cy="8.5" r="1.5" />
@@ -188,8 +220,8 @@ export default function ScanPage() {
 
           <button
             onClick={handleCapture}
-            disabled={!cameraReady || status === 'scanning'}
-            style={{ ...captureBtn, opacity: !cameraReady || status === 'scanning' ? 0.5 : 1 }}
+            disabled={!cameraReady || busy}
+            style={{ ...captureBtn, opacity: !cameraReady || busy ? 0.5 : 1 }}
             aria-label="Capture"
           >
             <span style={captureBtnInner} />
@@ -214,6 +246,7 @@ export default function ScanPage() {
           type="file"
           accept="image/*"
           onChange={handleGalleryFile}
+          disabled={busy}
           style={{ display: 'none' }}
         />
       </div>

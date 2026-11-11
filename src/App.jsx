@@ -3,7 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation 
 import { supabase } from './supabaseClient';
 import Login from './Login';
 import Profile from './Profile';
+import ProfileCardPage from './ProfileCardPage';
 import ScanPage from './ScanPage';
+import MenuReviewPage from './MenuReviewPage';
 import ResultPage from './ResultPage';
 import HistoryPage from './HistoryPage';
 import ChatPage from './ChatPage';
@@ -12,6 +14,7 @@ import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
 
 function Home() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [profile, setProfile] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState('');
   const [loading, setLoading] = useState(true);
@@ -188,6 +191,7 @@ function Home() {
                 )}
               </div>
             </div>
+            <button type="button" className="dietary-card-entry" style={{ marginTop: 14 }} onClick={() => navigate('/profile/card', { state: { cardBackground: location } })}>Show my dietary card</button>
           </section>
         </main>
 
@@ -311,20 +315,34 @@ function HomeBottomNav() {
   );
 }
 
-function App() {
+function AppRoutes() {
+  const location = useLocation();
+  const background = location.state?.cardBackground;
+  const showingCard = location.pathname === '/profile/card'
+    && ['/home', '/profile', '/result'].includes(background?.pathname);
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/scan" element={<ScanPage />} />
-        <Route path="/result" element={<ResultPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/chat" element={<ChatPage />} />
-      </Routes>
-    </Router>
+    <>
+      {/* Keep the originating screen mounted: returning must not re-run analysis. */}
+      <div hidden={showingCard}>
+        <Routes location={showingCard ? background : location}>
+          <Route path="/" element={<Login />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/profile/card" element={<ProfileCardPage />} />
+          <Route path="/scan" element={<ScanPage />} />
+          <Route path="/menu-review" element={<MenuReviewPage />} />
+          <Route path="/result" element={<ResultPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+        </Routes>
+      </div>
+      {showingCard && <ProfileCardPage />}
+    </>
   );
+}
+
+function App() {
+  return <Router><AppRoutes /></Router>;
 }
 
 export default App;
