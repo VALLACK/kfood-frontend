@@ -1,3 +1,5 @@
+import { markProfileSetupSeen } from './profileSetup';
+import GuestFeatureDialog from './GuestFeatureDialog';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
@@ -184,6 +186,7 @@ const Profile = () => {
         return;
       }
 
+      markProfileSetupSeen(user.id);
       showToast('Profile saved successfully!', 'success');
       setTimeout(() => navigate('/home'), 800);
     } catch (err) {
@@ -353,13 +356,14 @@ const Profile = () => {
           </div>
         </main>
 
-        <ProfileBottomNav showToast={showToast} />
+        <ProfileBottomNav />
       </div>
     </div>
   );
 };
 
-function ProfileBottomNav({ showToast }) {
+function ProfileBottomNav() {
+  const [restrictedFeature, setRestrictedFeature] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
@@ -368,7 +372,7 @@ function ProfileBottomNav({ showToast }) {
     const isGuest = localStorage.getItem('isGuest') === 'true';
 
     if (isGuest) {
-      showToast(`${featureName} feature is available for signed-in users only.`, 'error');
+      setRestrictedFeature(featureName);
       return;
     }
 
@@ -376,6 +380,7 @@ function ProfileBottomNav({ showToast }) {
   };
 
   return (
+    <>
     <nav style={bottomNavStyle}>
       <button onClick={() => navigate('/home')} style={navItem(currentPath === '/home')}>
         <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -420,6 +425,8 @@ function ProfileBottomNav({ showToast }) {
         <span>Profile</span>
       </button>
     </nav>
+    {restrictedFeature && <GuestFeatureDialog feature={restrictedFeature} onClose={() => setRestrictedFeature(null)} />}
+    </>
   );
 }
 
