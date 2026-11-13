@@ -2,65 +2,90 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import gamcheonImg from './assets/gamcheon.jpg';
+import Onboarding from './Onboarding';
+import { needsProfileSetup } from './profileSetup';
+import { ONBOARDING_COMPLETE_KEY, readOnboardingLanguage } from './onboardingStorage';
 
 function Login() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [guestLoading, setGuestLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem(ONBOARDING_COMPLETE_KEY) !== 'true');
+  const finishOnboarding = () => {
+    localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
+    setShowOnboarding(false);
+  };
 
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    let active = true;
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+    let resolvingUser = null;
+    const onSession = async (session) => {
+      if (!active) return;
       if (session?.user) {
+        if (resolvingUser === session.user.id) return;
+        resolvingUser = session.user.id;
+        setLoading(true);
+        localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
         localStorage.removeItem('isGuest');
-        navigate('/home', { replace: true });
+        let showSetup = true;
+        try { showSetup = await needsProfileSetup(supabase, session.user.id); }
+        catch { /* A failed profile lookup must not imply a personalized profile exists. */ }
+        if (active && resolvingUser === session.user.id) navigate(showSetup ? '/profile/setup' : '/home', { replace: true, state: showSetup ? { profileSetupUserId: session.user.id } : null });
       } else {
+        resolvingUser = null;
         setLoading(false);
       }
     };
-
-    checkSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        localStorage.removeItem('isGuest');
-        navigate('/home', { replace: true });
-      } else {
-        setLoading(false);
-      }
+    supabase.auth.getSession().then(({ data }) => onSession(data?.session)).catch(() => {
+      if (active) { setLoading(false); setAuthError('Could not check your session. Please try signing in again.'); }
     });
-
-    return () => subscription.unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { setTimeout(() => { if (active) onSession(session); }, 0); });
+    return () => { active = false; subscription.unsubscribe(); };
   }, [navigate]);
 
   // 구글 로그인
   const handleLogin = async () => {
-    if (!supabase) return;
-    localStorage.removeItem('isGuest');
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/`,
-        queryParams: { prompt: 'select_account' },
-      },
-    });
-
-    if (error) {
-      console.error('Google Sign-in failed:', error.message);
+    if (googleLoading) return;
+    finishOnboarding();
+    setAuthError('');
+    if (!supabase) {
+      setAuthError('Google sign-in is unavailable. Please continue as a guest.');
+      return;
+    }
+    setGoogleLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/`,
+          queryParams: { prompt: 'select_account' },
+        },
+      });
+      if (error) throw error;
+    } catch {
+      setAuthError('Google sign-in failed. Please try again or continue as a guest.');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
-  // 게스트 진입 (프로필 및 언어 기록 초기화)
+  // 새 게스트 프로필로 시작하되 온보딩에서 선택한 언어는 유지한다.
   const handleGuestLogin = () => {
+    finishOnboarding();
     setGuestLoading(true);
     
-    // 이전 게스트 데이터 및 언어 저장값 삭제
+    // 이전 게스트 프로필만 초기화하고 선택 언어는 이어받는다.
     localStorage.removeItem('guestProfile');
-    localStorage.removeItem('appLanguage'); // 👈 추가된 부분 (기본 언어 영어로 리셋)
+    localStorage.setItem('appLanguage', readOnboardingLanguage());
     
     localStorage.setItem('isGuest', 'true');
-    navigate('/home');
+    navigate('/profile/setup');
   };
 
   if (loading) {
@@ -72,6 +97,8 @@ function Login() {
       </div>
     );
   }
+
+  if (showOnboarding) return <Onboarding onGoogleSignIn={handleLogin} onGuestContinue={handleGuestLogin} />;
 
   return (
     <div style={loginContainer}>
@@ -99,19 +126,21 @@ function Login() {
           </div>
 
           {/* 로그인 / 게스트 버튼 */}
-          <button onClick={handleLogin} style={googleButton}>
+          {authError && <p role="alert" style={{ color: '#B91C1C', fontSize: 13, marginBottom: 12 }}>{authError}</p>}
+          <button onClick={handleLogin} style={googleButton} disabled={googleLoading}>
             <svg style={{ width: 18, height: 18 }} viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
             </svg>
-            <span style={{ fontWeight: 600 }}>Sign in with Google</span>
+            <span style={{ fontWeight: 600 }}>{googleLoading ? 'Signing in...' : 'Sign in with Google'}</span>
           </button>
 
           <button onClick={handleGuestLogin} style={guestLink} disabled={guestLoading}>
             {guestLoading ? 'Entering...' : 'Continue as Guest'}
           </button>
+          <button type="button" className="login-intro-button" onClick={() => setShowOnboarding(true)}>View app introduction</button>
         </div>
 
         <p style={footerText}>Designed for Busan Gastronomy Tourism Support Center</p>

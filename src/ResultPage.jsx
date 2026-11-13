@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { supabase } from './supabaseClient';
 import StaffQuestionCard from './StaffQuestionCard';
+import ScanErrorScreen from './ScanErrorScreen';
+import { scanFailure, UNREADABLE_MENU, validAnalysisResults } from './scanFailure';
 import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -248,9 +250,11 @@ export default function ResultPage() {
   const navigate  = useNavigate();
   const [results, setResults]   = useState(() => location.state?.analysisSnapshot?.results || []);
   const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const [error, setError]       = useState(null);
   const [profileApplied, setProfileApplied] = useState(() => location.state?.analysisSnapshot?.profileApplied ?? true);
   const analysisStarted = useRef(false);
+  const analysisBusy = useRef(false);
+  const lastPayload = useRef(null);
 
   const menus = location.state?.menus;
   const ocrText = location.state?.ocrText;
@@ -271,11 +275,15 @@ export default function ResultPage() {
   }, []);
 
   const fetchAnalysis = async (payload) => {
+    if (analysisBusy.current) return;
+    analysisBusy.current = true;
+    lastPayload.current = payload;
     setLoading(true);
-    setError('');
+    setError(null);
+    setResults([]);
     try {
       // 로그인 상태면 Supabase 토큰을 실어 보내서 서버가 DB에 저장된 프로필(알레르기 등)을 적용하게 함
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = supabase ? (await supabase.auth.getSession()).data.session : null;
       const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
       
       const isGuest = localStorage.getItem('isGuest') === 'true';
@@ -304,21 +312,21 @@ export default function ResultPage() {
       headers,
     });
 
-      setResults(res.data.results || []);
+      if (!validAnalysisResults(res.data?.results)) {
+        setError({ kind: 'connection', title: 'Incomplete analysis response', message: 'The server did not return analysis results. Please try again.' });
+        return;
+      }
+      if (!res.data.results.length) {
+        setError(UNREADABLE_MENU);
+        return;
+      }
+      setResults(res.data.results);
       setProfileApplied(res.data.profile_applied !== false);
     } catch (err) {
-      if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
-        setError('Cannot reach the server. Please check that it is running.');
-      } else if (err.code === 'ECONNABORTED') {
-        setError('The analysis is taking too long. Please try again in a moment.');
-      } else if (err.response?.status === 500) {
-        setError('A server error occurred. Please try again later.');
-      } else if (err.response?.status === 429) {
-        setError('AI request limit reached. Please try again shortly.');
-      } else {
-        setError(`Something went wrong: ${err.message}`);
-      }
+      setResults([]);
+      setError(scanFailure(err, 'analyze'));
     } finally {
+      analysisBusy.current = false;
       setLoading(false);
     }
   };
@@ -333,6 +341,12 @@ export default function ResultPage() {
     CAUTION: results.filter((r) => r.risk?.level === 'CAUTION').length,
     SAFE:    results.filter((r) => r.risk?.level === 'SAFE').length,
   };
+
+  if (error) return <ScanErrorScreen failure={error} header="Analysis Results"
+    onRetry={() => lastPayload.current && fetchAnalysis(lastPayload.current)}
+    onRetake={() => navigate('/scan')}
+    onReviewMenus={() => navigate('/menu-review', { state: { ...location.state, analysisSnapshot: undefined } })}
+    onHome={() => navigate('/home')} />;
 
   return (
     <div style={pageOuter}>
@@ -375,7 +389,6 @@ export default function ResultPage() {
           )}
 
           {loading && <div style={loadingBox}>🧠 Analyzing ingredients...</div>}
-          {error   && <div style={errorBox}>⚠️ {error}</div>}
           {!profileApplied && results.length > 0 && (
             <div style={noticeBox}>
               ⚠️ Your profile was not applied. Log in and set your allergies and diet to get personalized results. Until then, SAFE does not mean the dish is safe for you.
@@ -616,7 +629,6 @@ const summaryDot = {
 const loadingBox = { textAlign: 'center', padding: '40px 20px', fontSize: 14, color: '#64748B' };
 const staffHintBtn = { display: 'block', width: 'calc(100% - 32px)', margin: '0 16px 14px', textAlign: 'left', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '9px 12px', fontSize: 12, fontWeight: 700, color: '#92400E', cursor: 'pointer' };
 const noticeBox = { background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#92400E', marginBottom: 14, lineHeight: 1.5 };
-const errorBox = { background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#DC2626', marginBottom: 14, lineHeight: 1.5 };
 const emptyBox = { textAlign: 'center', padding: '60px 20px' };
 
 const cardBase = {

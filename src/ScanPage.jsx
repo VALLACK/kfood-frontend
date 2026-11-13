@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { prepareMenuImage } from './prepareMenuImage';
+import ScanErrorScreen from './ScanErrorScreen';
+import { scanFailure, UNREADABLE_MENU } from './scanFailure';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -14,6 +16,7 @@ export default function ScanPage() {
   const busyRef = useRef(false);
   const requestRef = useRef(null);
   const previewUrlRef = useRef(null);
+  const preparedUploadRef = useRef(null);
 
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState('');
@@ -21,12 +24,17 @@ export default function ScanPage() {
   const [torchSupported, setTorchSupported] = useState(false);
   const [capturedPreview, setCapturedPreview] = useState(null);
   const [status, setStatus] = useState(''); // '' | 'preparing' | 'scanning' | 'error'
-  const [error, setError] = useState('');
+  const [failure, setFailure] = useState(null);
+  const [cameraAttempt, setCameraAttempt] = useState(0);
   const busy = status === 'preparing' || status === 'scanning';
 
   // 카메라 스트림 시작 (지원 안 되거나 거부되면 갤러리 선택으로 대체)
   useEffect(() => {
     let active = true;
+    setCameraReady(false);
+    setCameraError('');
+    setTorchOn(false);
+    setTorchSupported(false);
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -56,7 +64,7 @@ export default function ScanPage() {
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, []);
+  }, [cameraAttempt]);
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -73,44 +81,56 @@ export default function ScanPage() {
     }
   };
 
-  const runScan = async (source, fileName) => {
+  const runScan = async (source, fileName, displayName = fileName) => {
     if (busyRef.current) return;
     busyRef.current = true;
     const controller = new AbortController();
     requestRef.current = controller;
     setStatus('preparing');
-    setError('');
+    setFailure(null);
+    let stage = 'preparing';
     try {
       const prepared = await prepareMenuImage(source, fileName);
       if (controller.signal.aborted) return;
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = URL.createObjectURL(prepared.blob);
       setCapturedPreview(previewUrlRef.current);
+      preparedUploadRef.current = { ...prepared, displayName };
+      stage = 'ocr';
       setStatus('scanning');
       const formData = new FormData();
       formData.append('file', prepared.blob, prepared.fileName);
       const res = await axios.post(`${API_URL}/ocr`, formData, {
         signal: controller.signal,
+        timeout: 120000,
       });
       if (controller.signal.aborted) return;
       stopCamera();
+      if (!Array.isArray(res.data?.menus)) {
+        setStatus('error');
+        setFailure({ kind: 'connection', title: 'Incomplete scan response', message: 'The server did not return a menu list. Please try again.' });
+        return;
+      }
+      if (!res.data.menus.some((menu) => typeof menu?.name === 'string' && menu.name.trim())) {
+        setStatus('error');
+        setFailure(UNREADABLE_MENU);
+        return;
+      }
       navigate('/menu-review', {
         replace: true,
         state: {
           menus: res.data.menus,
           ocrText: res.data.text,
-          fileName,
+          fileName: displayName,
           truncated: res.data.truncated === true,
         },
       });
     } catch (err) {
       if (controller.signal.aborted) return;
+      stopCamera();
+      setCameraReady(false);
       setStatus('error');
-      setError(err.response?.status === 413
-        ? 'This photo is too large for the server. Please photograph the menu in sections.'
-        : err.isAxiosError
-          ? 'Scan failed. Please check your connection and try again.'
-          : err.message || 'This photo could not be prepared. Please choose another image.');
+      setFailure(scanFailure(err, stage));
     } finally {
       busyRef.current = false;
     }
@@ -147,8 +167,21 @@ export default function ScanPage() {
     previewUrlRef.current = null;
     setCapturedPreview(null);
     setStatus('');
-    setError('');
+    setFailure(null);
+    preparedUploadRef.current = null;
+    setCameraAttempt((value) => value + 1);
   };
+
+  const galleryInput = <input ref={galleryInputRef} type="file" accept="image/*" onChange={handleGalleryFile} disabled={busy} style={{ display: 'none' }} />;
+  if (failure) return <>
+    <ScanErrorScreen failure={failure} onRetake={handleRetry} onChoosePhoto={() => galleryInputRef.current?.click()}
+      onRetry={() => {
+        const saved = preparedUploadRef.current;
+        if (saved) runScan(saved.blob, saved.fileName, saved.displayName);
+        else handleRetry();
+      }} onHome={handleClose} />
+    {galleryInput}
+  </>;
 
   return (
     <div style={pageOuter}>
@@ -198,12 +231,7 @@ export default function ScanPage() {
             </div>
           )}
 
-          {status === 'error' && (
-            <div style={scanningCard}>
-              <div style={{ ...scanningText, color: '#FCA5A5', whiteSpace: 'pre-line' }}>{error}</div>
-              <button onClick={handleRetry} style={retryBtn}>Try again</button>
-            </div>
-          )}
+
         </div>
 
         {!status && <div style={hintText}>Point at the menu and tap to capture</div>}
@@ -241,14 +269,7 @@ export default function ScanPage() {
 
         <div style={dragHandle} />
 
-        <input
-          ref={galleryInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleGalleryFile}
-          disabled={busy}
-          style={{ display: 'none' }}
-        />
+        {galleryInput}
       </div>
     </div>
   );
@@ -377,17 +398,6 @@ const scanningText = {
   fontWeight: 600,
 };
 
-const retryBtn = {
-  marginTop: 4,
-  padding: '8px 18px',
-  borderRadius: 20,
-  border: 'none',
-  background: '#1D5BB4',
-  color: '#fff',
-  fontSize: 13,
-  fontWeight: 700,
-  cursor: 'pointer',
-};
 
 const hintText = {
   textAlign: 'center',
