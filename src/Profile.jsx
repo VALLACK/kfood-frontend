@@ -3,7 +3,7 @@ import GuestFeatureDialog from './GuestFeatureDialog';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
+import { SHOW_HISTORY_TAB, SHOW_CHAT_TAB } from './featureFlags';
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -381,51 +381,51 @@ function ProfileBottomNav() {
 
   return (
     <>
-    <nav style={bottomNavStyle}>
-      <button onClick={() => navigate('/home')} style={navItem(currentPath === '/home')}>
-        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-        <span>Home</span>
-      </button>
+      <nav style={bottomNavStyle}>
+        <button onClick={() => navigate('/home')} style={navItem(currentPath === '/home')}>
+          <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
+          <span>Home</span>
+        </button>
 
-      {SHOW_HISTORY_CHAT_TABS && (
-        <>
+        {SHOW_HISTORY_TAB && (
           <button
             onClick={() => handleProtectedNav('/history', 'History')}
             style={navItem(currentPath === '/history')}
           >
             <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
-                <polyline points="12 7 12 12 15 12" />
-                <path d="M18 21V15" />
-                <path d="M15 18l3-3 3 3" />
-              </svg>
+              <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
+              <polyline points="12 7 12 12 15 12" />
+              <path d="M18 21V15" />
+              <path d="M15 18l3-3 3 3" />
+            </svg>
             <span>History</span>
           </button>
+        )}
 
+        {SHOW_CHAT_TAB && (
           <button
             onClick={() => handleProtectedNav('/chat', 'Chat')}
             style={navItem(currentPath === '/chat')}
           >
             <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
             </svg>
             <span>Chat</span>
           </button>
-        </>
-      )}
+        )}
 
-      <button onClick={() => navigate('/profile')} style={navItem(currentPath === '/profile')}>
-        <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
-        </svg>
-        <span>Profile</span>
-      </button>
-    </nav>
-    {restrictedFeature && <GuestFeatureDialog feature={restrictedFeature} onClose={() => setRestrictedFeature(null)} />}
+        <button onClick={() => navigate('/profile')} style={navItem(currentPath === '/profile')}>
+          <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span>Profile</span>
+        </button>
+      </nav>
+      {restrictedFeature && <GuestFeatureDialog feature={restrictedFeature} onClose={() => setRestrictedFeature(null)} />}
     </>
   );
 }

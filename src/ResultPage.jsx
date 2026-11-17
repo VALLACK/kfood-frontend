@@ -4,7 +4,7 @@ import axios from 'axios';
 import { supabase } from './supabaseClient';
 import ScanErrorScreen from './ScanErrorScreen';
 import { scanFailure, UNREADABLE_MENU, validAnalysisResults } from './scanFailure';
-import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
+import { SHOW_HISTORY_TAB, SHOW_CHAT_TAB } from './featureFlags';
 import LoginRequiredModal from './components/LoginRequiredModal';
 import ResultCard from './components/ResultCard';
 
@@ -64,26 +64,25 @@ export default function ResultPage() {
         localStorage.getItem('guestProfile') || 'null'
       );
 
-       const body = {
-      ...payload,
-
-      ...(isGuest && guest
-        ? {
-            profile: {
-              allergies: guest.allergies || [],
-              religious_diet: guest.religious_diet || null,
-              vegetarian_type: guest.vegetarian_type || null,
-              preferred_language:
-                localStorage.getItem('appLanguage') || 'en',
-            },
-          }
-        : {}),
+      const body = {
+        ...payload,
+        ...(isGuest && guest
+          ? {
+              profile: {
+                allergies: guest.allergies || [],
+                religious_diet: guest.religious_diet || null,
+                vegetarian_type: guest.vegetarian_type || null,
+                preferred_language:
+                  localStorage.getItem('appLanguage') || 'en',
+              },
+            }
+          : {}),
       };
 
-    const res = await axios.post(`${API_URL}/analyze`, body, {
-      timeout: 180000,
-      headers,
-    });
+      const res = await axios.post(`${API_URL}/analyze`, body, {
+        timeout: 180000,
+        headers,
+      });
 
       if (!validAnalysisResults(res.data?.results)) {
         setError({ kind: 'connection', title: 'Incomplete analysis response', message: 'The server did not return analysis results. Please try again.' });
@@ -221,35 +220,35 @@ function BottomNav() {
           <span>Home</span>
         </button>
 
-        {SHOW_HISTORY_CHAT_TABS && (
-          <>
-            {/* History */}
-            <button
-              onClick={() => handleProtectedNav('/history', 'History')}
-              aria-current={pathname === '/history' ? 'page' : undefined}
-              style={navItem(pathname === '/history')}
-            >
-              <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
-                <polyline points="12 7 12 12 15 12" />
-                <path d="M18 21V15" />
-                <path d="M15 18l3-3 3 3" />
-              </svg>
-              <span>History</span>
-            </button>
+        {/* History */}
+        {SHOW_HISTORY_TAB && (
+          <button
+            onClick={() => handleProtectedNav('/history', 'History')}
+            aria-current={pathname === '/history' ? 'page' : undefined}
+            style={navItem(pathname === '/history')}
+          >
+            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
+              <polyline points="12 7 12 12 15 12" />
+              <path d="M18 21V15" />
+              <path d="M15 18l3-3 3 3" />
+            </svg>
+            <span>History</span>
+          </button>
+        )}
 
-            {/* Chat */}
-            <button
-              onClick={() => handleProtectedNav('/chat', 'Chat')}
-              aria-current={pathname === '/chat' ? 'page' : undefined}
-              style={navItem(pathname === '/chat')}
-            >
-              <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
-              </svg>
-              <span>Chat</span>
-            </button>
-          </>
+        {/* Chat */}
+        {SHOW_CHAT_TAB && (
+          <button
+            onClick={() => handleProtectedNav('/chat', 'Chat')}
+            aria-current={pathname === '/chat' ? 'page' : undefined}
+            style={navItem(pathname === '/chat')}
+          >
+            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
+            </svg>
+            <span>Chat</span>
+          </button>
         )}
 
         {/* Profile */}
