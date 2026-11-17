@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation 
 import { supabase } from './supabaseClient';
 import Login from './Login';
 import Profile from './Profile';
+import ProfileSetupPage from './ProfileSetupPage';
 import ProfileCardPage from './ProfileCardPage';
 import ScanPage from './ScanPage';
 import MenuReviewPage from './MenuReviewPage';
@@ -12,8 +13,8 @@ import ChatPage from './ChatPage';
 import ExplorePage from './ExplorePage'; // 식당 검색 목록 (SCR-12)
 import RestaurantDetailPage from './RestaurantDetailPage'; // 식당 상세 (SCR-13)
 import './App.css';
-import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
-import LoginRequiredModal from './components/LoginRequiredModal';
+import GuestFeatureDialog from './GuestFeatureDialog';
+import { SHOW_HISTORY_TAB, SHOW_CHAT_TAB } from './featureFlags';
 
 function Home() {
   const navigate = useNavigate();
@@ -253,33 +254,33 @@ function HomeBottomNav() {
           <span>Home</span>
         </button>
 
-        {SHOW_HISTORY_CHAT_TABS && (
-          <>
-            {/* History */}
-            <button
-              onClick={() => handleProtectedNav('/history', 'History')}
-              style={navItem(currentPath === '/history')}
-            >
-              <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
-                <polyline points="12 7 12 12 15 12" />
-                <path d="M18 21V15" />
-                <path d="M15 18l3-3 3 3" />
-              </svg>
-              <span>History</span>
-            </button>
+        {/* History (개별 플래그 적용) */}
+        {SHOW_HISTORY_TAB && (
+          <button
+            onClick={() => handleProtectedNav('/history', 'History')}
+            style={navItem(currentPath === '/history')}
+          >
+            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
+              <polyline points="12 7 12 12 15 12" />
+              <path d="M18 21V15" />
+              <path d="M15 18l3-3 3 3" />
+            </svg>
+            <span>History</span>
+          </button>
+        )}
 
-            {/* Chat */}
-            <button
-              onClick={() => handleProtectedNav('/chat', 'Chat')}
-              style={navItem(currentPath === '/chat')}
-            >
-              <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
-              </svg>
-              <span>Chat</span>
-            </button>
-          </>
+        {/* Chat (개별 플래그 적용) */}
+        {SHOW_CHAT_TAB && (
+          <button
+            onClick={() => handleProtectedNav('/chat', 'Chat')}
+            style={navItem(currentPath === '/chat')}
+          >
+            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
+            </svg>
+            <span>Chat</span>
+          </button>
         )}
 
         {/* Profile */}
@@ -292,19 +293,34 @@ function HomeBottomNav() {
         </button>
       </nav>
 
-      <LoginRequiredModal
-        isOpen={showLoginModal}
-        selectedFeature={selectedFeature}
-        onClose={() => setShowLoginModal(false)}
-        onLogin={() => {
-          setShowLoginModal(false);
-          navigate('/');
-        }}
-      />
+      {showLoginModal && (
+        <GuestFeatureDialog
+          feature={selectedFeature}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
     </>
   );
 }
 
+function MemberFeature({ feature, children }) {
+  const navigate = useNavigate();
+  const [allowed, setAllowed] = useState(null);
+  useEffect(() => {
+    let active = true;
+    if (localStorage.getItem('isGuest') === 'true' || !supabase) {
+      setAllowed(false);
+      return;
+    }
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) setAllowed(Boolean(data?.session?.access_token));
+    }).catch(() => { if (active) setAllowed(false); });
+    return () => { active = false; };
+  }, []);
+  if (allowed === null) return <p role="status" style={{ textAlign: 'center', padding: 24 }}>Checking authentication...</p>;
+  if (allowed) return children;
+  return <><Home /><GuestFeatureDialog feature={feature} onClose={() => navigate('/home', { replace: true })} /></>;
+}
 
 function AppRoutes() {
   const location = useLocation();
@@ -325,14 +341,14 @@ function AppRoutes() {
           <Route path="/" element={<Login />} />
           <Route path="/home" element={<Home />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/profile/setup" element={<ProfileSetupPage />} />
           <Route path="/profile/card" element={<ProfileCardPage />} />
           <Route path="/scan" element={<ScanPage />} />
           <Route path="/menu-review" element={<MenuReviewPage />} />
           <Route path="/result" element={<ResultPage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/history" element={<MemberFeature feature="History"><HistoryPage /></MemberFeature>} />
+          <Route path="/chat" element={<MemberFeature feature="Chat"><ChatPage /></MemberFeature>} />
 
-          {/* PR #15: 식당 탐색 및 상세 페이지 */}
           <Route path="/explore" element={<ExplorePage />} />
           <Route path="/restaurant/:id" element={<RestaurantDetailPage />} />
         </Routes>
@@ -342,7 +358,6 @@ function AppRoutes() {
     </>
   );
 }
-
 
 function App() {
   return <Router><AppRoutes /></Router>;
@@ -369,13 +384,13 @@ const scanBtnText = { fontSize: 15, fontWeight: 700, color: '#1D5BB4' };
 
 /* [신규 추가] 식당 찾기 카드 스타일 */
 const exploreCard = {
-  background: '#EFF6FF', // 연한 푸른빛 배경
+  background: '#EFF6FF',
   borderRadius: 20,
   padding: '16px 20px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  border: '1px solid #DBEAFE', // 은은한 파란 테두리
+  border: '1px solid #DBEAFE',
   cursor: 'pointer',
   transition: 'all 0.2s ease',
 };
@@ -390,7 +405,7 @@ const exploreIconWrapper = {
   width: 48,
   height: 48,
   borderRadius: 14,
-  background: '#FFFFFF', // 아이콘 뒤 흰색 라운드 박스
+  background: '#FFFFFF',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -416,7 +431,7 @@ const exploreDesc = {
 const exploreArrow = {
   fontSize: 16,
   fontWeight: 700,
-  color: '#1D5BB4', // 파란색 셰브론
+  color: '#1D5BB4',
   marginLeft: 8,
 };
 const filterSection = { display: 'flex', flexDirection: 'column', gap: 10 };

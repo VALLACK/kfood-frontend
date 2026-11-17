@@ -2,7 +2,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { supabase } from './supabaseClient';
-import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
+import ScanErrorScreen from './ScanErrorScreen';
+import { scanFailure, UNREADABLE_MENU, validAnalysisResults } from './scanFailure';
+import { SHOW_HISTORY_TAB, SHOW_CHAT_TAB } from './featureFlags';
 import LoginRequiredModal from './components/LoginRequiredModal';
 import ResultCard from './components/ResultCard';
 
@@ -21,9 +23,11 @@ export default function ResultPage() {
   const navigate  = useNavigate();
   const [results, setResults]   = useState(() => location.state?.analysisSnapshot?.results || []);
   const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const [error, setError]       = useState(null);
   const [profileApplied, setProfileApplied] = useState(() => location.state?.analysisSnapshot?.profileApplied ?? true);
   const analysisStarted = useRef(false);
+  const analysisBusy = useRef(false);
+  const lastPayload = useRef(null);
 
   const menus = location.state?.menus;
   const ocrText = location.state?.ocrText;
@@ -44,11 +48,15 @@ export default function ResultPage() {
   }, []);
 
   const fetchAnalysis = async (payload) => {
+    if (analysisBusy.current) return;
+    analysisBusy.current = true;
+    lastPayload.current = payload;
     setLoading(true);
-    setError('');
+    setError(null);
+    setResults([]);
     try {
       // 로그인 상태면 Supabase 토큰을 실어 보내서 서버가 DB에 저장된 프로필(알레르기 등)을 적용하게 함
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = supabase ? (await supabase.auth.getSession()).data.session : null;
       const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
       
       const isGuest = localStorage.getItem('isGuest') === 'true';
@@ -56,42 +64,41 @@ export default function ResultPage() {
         localStorage.getItem('guestProfile') || 'null'
       );
 
-       const body = {
-      ...payload,
-
-      ...(isGuest && guest
-        ? {
-            profile: {
-              allergies: guest.allergies || [],
-              religious_diet: guest.religious_diet || null,
-              vegetarian_type: guest.vegetarian_type || null,
-              preferred_language:
-                localStorage.getItem('appLanguage') || 'en',
-            },
-          }
-        : {}),
+      const body = {
+        ...payload,
+        ...(isGuest && guest
+          ? {
+              profile: {
+                allergies: guest.allergies || [],
+                religious_diet: guest.religious_diet || null,
+                vegetarian_type: guest.vegetarian_type || null,
+                preferred_language:
+                  localStorage.getItem('appLanguage') || 'en',
+              },
+            }
+          : {}),
       };
 
-    const res = await axios.post(`${API_URL}/analyze`, body, {
-      timeout: 180000,
-      headers,
-    });
+      const res = await axios.post(`${API_URL}/analyze`, body, {
+        timeout: 180000,
+        headers,
+      });
 
-      setResults(res.data.results || []);
+      if (!validAnalysisResults(res.data?.results)) {
+        setError({ kind: 'connection', title: 'Incomplete analysis response', message: 'The server did not return analysis results. Please try again.' });
+        return;
+      }
+      if (!res.data.results.length) {
+        setError(UNREADABLE_MENU);
+        return;
+      }
+      setResults(res.data.results);
       setProfileApplied(res.data.profile_applied !== false);
     } catch (err) {
-      if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
-        setError('Cannot reach the server. Please check that it is running.');
-      } else if (err.code === 'ECONNABORTED') {
-        setError('The analysis is taking too long. Please try again in a moment.');
-      } else if (err.response?.status === 500) {
-        setError('A server error occurred. Please try again later.');
-      } else if (err.response?.status === 429) {
-        setError('AI request limit reached. Please try again shortly.');
-      } else {
-        setError(`Something went wrong: ${err.message}`);
-      }
+      setResults([]);
+      setError(scanFailure(err, 'analyze'));
     } finally {
+      analysisBusy.current = false;
       setLoading(false);
     }
   };
@@ -106,6 +113,12 @@ export default function ResultPage() {
     CAUTION: results.filter((r) => r.risk?.level === 'CAUTION').length,
     SAFE:    results.filter((r) => r.risk?.level === 'SAFE').length,
   };
+
+  if (error) return <ScanErrorScreen failure={error} header="Analysis Results"
+    onRetry={() => lastPayload.current && fetchAnalysis(lastPayload.current)}
+    onRetake={() => navigate('/scan')}
+    onReviewMenus={() => navigate('/menu-review', { state: { ...location.state, analysisSnapshot: undefined } })}
+    onHome={() => navigate('/home')} />;
 
   return (
     <div style={pageOuter}>
@@ -148,7 +161,6 @@ export default function ResultPage() {
           )}
 
           {loading && <div style={loadingBox}>🧠 Analyzing ingredients...</div>}
-          {error   && <div style={errorBox}>⚠️ {error}</div>}
           {!profileApplied && results.length > 0 && (
             <div style={noticeBox}>
               ⚠️ Your profile was not applied. Log in and set your allergies and diet to get personalized results. Until then, SAFE does not mean the dish is safe for you.
@@ -208,35 +220,35 @@ function BottomNav() {
           <span>Home</span>
         </button>
 
-        {SHOW_HISTORY_CHAT_TABS && (
-          <>
-            {/* History */}
-            <button
-              onClick={() => handleProtectedNav('/history', 'History')}
-              aria-current={pathname === '/history' ? 'page' : undefined}
-              style={navItem(pathname === '/history')}
-            >
-              <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
-                <polyline points="12 7 12 12 15 12" />
-                <path d="M18 21V15" />
-                <path d="M15 18l3-3 3 3" />
-              </svg>
-              <span>History</span>
-            </button>
+        {/* History */}
+        {SHOW_HISTORY_TAB && (
+          <button
+            onClick={() => handleProtectedNav('/history', 'History')}
+            aria-current={pathname === '/history' ? 'page' : undefined}
+            style={navItem(pathname === '/history')}
+          >
+            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
+              <polyline points="12 7 12 12 15 12" />
+              <path d="M18 21V15" />
+              <path d="M15 18l3-3 3 3" />
+            </svg>
+            <span>History</span>
+          </button>
+        )}
 
-            {/* Chat */}
-            <button
-              onClick={() => handleProtectedNav('/chat', 'Chat')}
-              aria-current={pathname === '/chat' ? 'page' : undefined}
-              style={navItem(pathname === '/chat')}
-            >
-              <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
-              </svg>
-              <span>Chat</span>
-            </button>
-          </>
+        {/* Chat */}
+        {SHOW_CHAT_TAB && (
+          <button
+            onClick={() => handleProtectedNav('/chat', 'Chat')}
+            aria-current={pathname === '/chat' ? 'page' : undefined}
+            style={navItem(pathname === '/chat')}
+          >
+            <svg style={navIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
+            </svg>
+            <span>Chat</span>
+          </button>
         )}
 
         {/* Profile */}
@@ -354,7 +366,6 @@ const summaryDot = {
 const loadingBox = { textAlign: 'center', padding: '40px 20px', fontSize: 14, color: '#64748B' };
 const staffHintBtn = { display: 'block', width: 'calc(100% - 32px)', margin: '0 16px 14px', textAlign: 'left', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '9px 12px', fontSize: 12, fontWeight: 700, color: '#92400E', cursor: 'pointer' };
 const noticeBox = { background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#92400E', marginBottom: 14, lineHeight: 1.5 };
-const errorBox = { background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#DC2626', marginBottom: 14, lineHeight: 1.5 };
 const emptyBox = { textAlign: 'center', padding: '60px 20px' };
 
 const cardBase = {

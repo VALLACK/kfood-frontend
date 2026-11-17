@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import { SHOW_HISTORY_CHAT_TABS } from './featureFlags';
+import { SHOW_HISTORY_TAB, SHOW_CHAT_TAB } from './featureFlags';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// 백엔드에서 analysis_result에 스캔 당시 프로필 스냅샷 저장이 지원되면 true로 전환
+const SHOW_PROFILE_RECHECK = false;
 
 const BADGE_STYLE = {
   SAFE: { text: '#137333', bg: '#E6F4EA' },
@@ -122,7 +125,8 @@ export default function HistoryPage() {
           .from('scan_logs')
           .select('id, profile_id, analysis_result, created_at')
           .eq('profile_id', profile.id)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(30);
 
         if (logsError) throw logsError;
 
@@ -176,10 +180,11 @@ export default function HistoryPage() {
             const summaryLine =
               topNames.join(', ') + (extraCount > 0 ? ` +${extraCount}` : '');
 
+            // 백엔드에 스캔 당시 프로필 스냅샷이 저장된 경우에만 매핑
             const scannedProfile =
               log.analysis_result?.profile ||
               log.analysis_result?.applied_profile ||
-              profile;
+              null;
 
             return {
               id: log.id,
@@ -206,6 +211,7 @@ export default function HistoryPage() {
   }, []);
 
   const isProfileChanged = (scan) => {
+    if (!SHOW_PROFILE_RECHECK) return false;
     if (!scan || !currentProfile || !scan.scannedProfile) return false;
     const prevStr = formatProfileSummary(scan.scannedProfile);
     const currStr = formatProfileSummary(currentProfile);
@@ -213,7 +219,7 @@ export default function HistoryPage() {
   };
 
   const handleRecheckWithCurrentProfile = async () => {
-    if (!selectedScan || rechecking) return;
+    if (!SHOW_PROFILE_RECHECK || !selectedScan || rechecking) return;
     setRechecking(true);
 
     try {
@@ -226,13 +232,15 @@ export default function HistoryPage() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const menuNames = selectedScan.dishes.map((d) => d.nameKo);
+      const menus = selectedScan.dishes.map((d) => ({
+        name: d.nameKo,
+      }));
 
       const response = await fetch(`${API_URL}/analyze`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          menus: menuNames,
+          menus,
           profile: {
             allergies: currentProfile?.allergies || [],
             religious_diet: currentProfile?.religious_diet || 'none',
@@ -274,10 +282,8 @@ export default function HistoryPage() {
               .map((r) => r.ingredient || r.label || r.tag)
               .filter(Boolean)
               .join(', '),
-            staffQuestionsCount: Array.isArray(item.staff_questions)
-              ? item.staff_questions.length
-              : item.staff_question
-              ? 1
+            staffQuestionsCount: Array.isArray(item.risk?.staff_questions)
+              ? item.risk.staff_questions.length
               : 0,
             rawItem: item,
           };
@@ -349,9 +355,9 @@ export default function HistoryPage() {
             </div>
           </header>
 
-          {/* 상세 본문 스크롤 (minHeight: 0 추가로 잘림 해결) */}
+          {/* 상세 본문 스크롤 */}
           <div style={contentScroll}>
-            {profileChanged && (
+            {SHOW_PROFILE_RECHECK && profileChanged && (
               <div style={profileChangedCard}>
                 <div style={profileChangedTitle}>
                   Your profile changed since this scan
@@ -591,6 +597,7 @@ function ScanHistoryCard({ scan, onSelect }) {
   );
 }
 
+/* ==================== 여기 하단 내비게이션(BottomNav) ==================== */
 function BottomNav() {
   const navigate = useNavigate();
   return (
@@ -609,39 +616,39 @@ function BottomNav() {
         <span>Home</span>
       </button>
 
-      {SHOW_HISTORY_CHAT_TABS && (
-        <>
-          <button onClick={() => navigate('/history')} style={navItem(true)}>
-            <svg
-              style={navIcon}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
-              <polyline points="12 7 12 12 15 12" />
-              <path d="M18 21V15" />
-              <path d="M15 18l3-3 3 3" />
-            </svg>
-            <span>History</span>
-          </button>
+      {SHOW_HISTORY_TAB && (
+        <button onClick={() => navigate('/history')} style={navItem(true)}>
+          <svg
+            style={navIcon}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 21A9 9 0 1 1 21 12c0 1.25-.26 2.45-.73 3.5" />
+            <polyline points="12 7 12 12 15 12" />
+            <path d="M18 21V15" />
+            <path d="M15 18l3-3 3 3" />
+          </svg>
+          <span>History</span>
+        </button>
+      )}
 
-          <button onClick={() => navigate('/chat')} style={navItem(false)}>
-            <svg
-              style={navIcon}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
-            </svg>
-            <span>Chat</span>
-          </button>
-        </>
+      {SHOW_CHAT_TAB && (
+        <button onClick={() => navigate('/chat')} style={navItem(false)}>
+          <svg
+            style={navIcon}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
+          </svg>
+          <span>Chat</span>
+        </button>
       )}
 
       <button onClick={() => navigate('/profile')} style={navItem(false)}>
@@ -661,7 +668,7 @@ function BottomNav() {
   );
 }
 
-/* ==================== Inline Styles (스크롤 잘림 수정) ==================== */
+/* ==================== Inline Styles ==================== */
 
 const pageOuter = {
   minHeight: '100vh',
@@ -735,7 +742,6 @@ const headerSubtitle = {
   lineHeight: '16px',
 };
 
-/* 핵심 수정: minHeight: 0 추가하여 내부 리스트가 길어져도 카드 잘림 없이 스크롤 작동 */
 const contentScroll = {
   flex: 1,
   minHeight: 0,
@@ -931,7 +937,6 @@ const detailBadgeRow = {
   flexShrink: 0,
 };
 
-/* 핵심 수정: flexShrink: 0 추가하여 내부 항목 확장 시 카드가 찌그러지지 않도록 고정 */
 const menuListCard = {
   background: '#FFFFFF',
   borderRadius: 20,
