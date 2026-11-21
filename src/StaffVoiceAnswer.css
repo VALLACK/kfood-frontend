@@ -1,0 +1,29 @@
+.staff-voice-start { margin-top: 12px; width: 100%; min-height: 42px; border: 1px solid #31599c; color: #31599c; background: #fff; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.staff-voice-dialog { font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box; width: min(390px, calc(100% - 24px)); max-width: 390px; max-height: 94svh; height: 812px; padding: 0; border: 0; border-radius: 24px; color: #0f172a; background: #f8fafc; text-align: left; }
+.staff-voice-dialog::backdrop { background: #0f172a99; }
+.staff-voice-dialog header { display: flex; gap: 10px; align-items: center; background: white; padding: 24px 18px 16px; }
+.staff-voice-dialog header > button { width: 36px; min-height: 40px; font-size: 28px; background: none; border: 0; color: #0f172a; cursor: pointer; }
+.staff-voice-dialog h2 { font-size: 20px; margin: 0; font-weight: 800; color: #0f172a; }
+.staff-voice-dialog p { font-size: 12px; line-height: 1.6; color: #64748b; margin: 6px 0; }
+.staff-voice-body { padding: 16px; }
+.staff-voice-question { background: white; border: 1px solid #eef2f6; border-radius: 16px; text-align: center; padding: 18px 16px; }
+.staff-voice-question > span { color: #31599c; background: #eff6ff; border-radius: 20px; font-size: 10px; padding: 6px 8px; }
+.staff-voice-question h3 { font-size: 24px; line-height: 1.5; color: #0f172a; margin: 16px 0 8px; overflow-wrap: anywhere; }
+.staff-voice-recording { text-align: center; border: 1px solid #fecaca; border-radius: 16px; background: #fff5f5; color: #b91c1c; margin-top: 18px; padding: 22px 12px; }
+.staff-voice-mic { display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 50%; color: white; background: #b91c1c; font-size: 28px; margin: 0 auto 16px; }
+.staff-voice-recording strong { font-size: 16px; }
+.staff-voice-wave { height: 42px; display: flex; align-items: center; justify-content: center; gap: 4px; margin: 12px 0; }
+.staff-voice-wave i { display: block; width: 4px; background: #ef4444; border-radius: 4px; animation: staff-pulse .8s ease-in-out infinite alternate; }
+@keyframes staff-pulse { to { transform: scaleY(.4); } }
+@media (prefers-reduced-motion: reduce) { .staff-voice-wave i { animation: none; } }
+.staff-voice-actions { display: grid; gap: 10px; margin-top: 20px; }
+.staff-voice-actions button { min-height: 44px; padding: 10px; border: 1px solid #31599c; border-radius: 10px; background: white; color: #31599c; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.staff-voice-actions .staff-voice-primary { background: #31599c; color: white; }
+.staff-voice-dialog button:disabled, .staff-voice-start:disabled { opacity: .55; cursor: default; }
+.staff-voice-dialog button:focus-visible, .staff-voice-dialog textarea:focus-visible, .staff-voice-start:focus-visible { outline: 3px solid #93c5fd !important; outline-offset: 2px; }
+.staff-voice-review { background: white; padding: 14px; border-radius: 12px; margin-top: 14px; }
+.staff-voice-review label { font-size: 13px; font-weight: 700; }
+.staff-voice-review textarea { width: 100%; box-sizing: border-box; margin-top: 8px; font: inherit; font-size: 16px; line-height: 1.5; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; resize: vertical; }
+.staff-voice-dialog p.staff-voice-error { color: #b91c1c; background: #fef2f2; padding: 12px; border-radius: 10px; }
+
+.staff-voice-read { margin-top: 12px; border: 1px solid #31599c; border-radius: 8px; background: white; color: #31599c; padding: 10px; font: inherit; font-size: 12px; cursor: pointer; }
