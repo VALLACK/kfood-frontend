@@ -1,3 +1,7 @@
+import { PrivacyDialog } from './PrivacyScreens';
+import { PRIVACY_VERSION } from './privacyVersion';
+import { ALLERGY_OPTIONS, RELIGION_OPTIONS, DIET_OPTIONS, normalizeAllergies, profileLabel } from './dietaryProfile';
+import './ExpandedProfile.css';
 import { markProfileSetupSeen } from './profileSetup';
 import GuestFeatureDialog from './GuestFeatureDialog';
 import React, { useState, useEffect } from 'react';
@@ -15,11 +19,15 @@ const Profile = () => {
   });
 
   // 선택 상태 (알레르기, 종교, 식단)
-  const [allergies, setAllergies] = useState([]);
+  const [allergies, setAllergies] = useState({});
+  const [showMoreAllergies, setShowMoreAllergies] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [religion, setReligion] = useState('');
   const [diet, setDiet] = useState('');
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [privacyDialog, setPrivacyDialog] = useState(null);
+  const [privacyError, setPrivacyError] = useState('');
 
   // 커스텀 토스트 상태 ({ show: boolean, message: string, type: 'success' | 'error' })
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -39,26 +47,14 @@ const Profile = () => {
     { code: 'ko', label: '한국어' },
   ];
 
-  const allergyOptions = [
-    { value: 'peanuts', label: 'Peanuts' },
-    { value: 'shellfish', label: 'Shellfish' },
-    { value: 'eggs', label: 'Eggs' },
-    { value: 'dairy', label: 'Dairy' },
-    { value: 'gluten', label: 'Gluten' },
-    { value: 'soy', label: 'Soy' },
-    { value: 'sesame', label: 'Sesame' },
-    { value: 'tree_nuts', label: 'Tree Nuts' },
-  ];
-
-  const religionOptions = [
-    { value: 'halal', label: 'Halal' },
-    { value: 'kosher', label: 'Kosher' },
-  ];
-
-  const dietOptions = [
-    { value: 'vegetarian', label: 'Vegetarian' },
-    { value: 'vegan', label: 'Vegan' },
-  ];
+  const allergyOptions = ALLERGY_OPTIONS;
+  const religionOptions = RELIGION_OPTIONS;
+  const dietOptions = DIET_OPTIONS;
+  const selectedAllergies = Object.entries(allergies);
+  const missingSeverity = selectedAllergies.some(([, severity]) => !['심각', '경미'].includes(severity));
+  const visibleAllergies = showMoreAllergies ? allergyOptions
+    : allergyOptions.filter((item, index) => index < 8 || Object.hasOwn(allergies, item.value));
+  const legacyAllergies = selectedAllergies.filter(([name]) => !allergyOptions.some(item => item.value === name));
 
   // 프로필 데이터 불러오기
   useEffect(() => {
@@ -74,9 +70,9 @@ const Profile = () => {
           const savedGuestData = localStorage.getItem('guestProfile');
           if (savedGuestData) {
             const parsed = JSON.parse(savedGuestData);
-            setAllergies(parsed.allergies || []);
-            setReligion(parsed.religious_diet || '');
-            setDiet(parsed.vegetarian_type || '');
+            setAllergies(normalizeAllergies(parsed.allergies));
+            setReligion(parsed.religious_diet === 'none' ? '' : parsed.religious_diet || '');
+            setDiet(parsed.vegetarian_type === 'none' ? '' : parsed.vegetarian_type || '');
           }
           setLoading(false);
           return;
@@ -99,12 +95,14 @@ const Profile = () => {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (!profileError && profile) {
-          setAllergies(profile.allergies || []);
-          setReligion(profile.religious_diet || '');
-          setDiet(profile.vegetarian_type || '');
+        if (profileError) throw profileError;
+        if (profile) {
+          setAllergies(normalizeAllergies(profile.allergies));
+          setReligion(profile.religious_diet === 'none' ? '' : profile.religious_diet || '');
+          setDiet(profile.vegetarian_type === 'none' ? '' : profile.vegetarian_type || '');
         }
       } catch (err) {
+        setLoadError(true);
         console.error('Load profile error:', err);
       } finally {
         setLoading(false);
@@ -122,9 +120,12 @@ const Profile = () => {
 
   const handleAllergyToggle = (e, value) => {
     e.currentTarget.blur();
-    setAllergies((prev) =>
-      prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
-    );
+    setAllergies((prev) => {
+      const next = { ...prev };
+      if (Object.hasOwn(next, value)) delete next[value];
+      else next[value] = 'unknown';
+      return next;
+    });
   };
 
   const handleReligionSelect = (e, value) => {
@@ -138,7 +139,12 @@ const Profile = () => {
   };
 
   // 프로필 저장
-  const handleComplete = async () => {
+  const handleComplete = async (consented = false) => {
+    if (loading || isSaving || loadError) return;
+    if (missingSeverity) { showToast('Choose Severe or Mild for each selected allergy.', 'error'); return; }
+    const guestMode = localStorage.getItem('isGuest') === 'true';
+    if (consented !== true) { setPrivacyError(''); setPrivacyDialog(guestMode ? 'guest' : 'consent'); return; }
+    setPrivacyError('');
     setIsSaving(true);
     const isGuest = localStorage.getItem('isGuest') === 'true';
 
@@ -154,6 +160,7 @@ const Profile = () => {
       };
       localStorage.setItem('guestProfile', JSON.stringify(guestData));
       setIsSaving(false);
+      setPrivacyDialog(null);
       showToast('Profile saved successfully!', 'success');
       setTimeout(() => navigate('/home'), 800);
       return;
@@ -176,25 +183,63 @@ const Profile = () => {
           religious_diet: religion,
           vegetarian_type: diet,
           preferred_language: selectedLang,
+          consent_version: PRIVACY_VERSION,
+          consented_at: new Date().toISOString(),
         },
         { onConflict: 'user_id' }
       );
 
       if (error) {
         console.error('DB Upsert Error:', error.message);
-        showToast('Failed to save profile: ' + error.message, 'error');
+        setPrivacyError('Could not save your profile and consent. Please try again. If this continues, server consent storage may not be configured.');
         return;
       }
 
+      setPrivacyDialog(null);
       markProfileSetupSeen(user.id);
       showToast('Profile saved successfully!', 'success');
       setTimeout(() => navigate('/home'), 800);
     } catch (err) {
       console.error('Save error:', err);
-      showToast('An unexpected error occurred.', 'error');
+      setPrivacyError('Could not save your profile and consent. Please try again.');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const saveOnDevice = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setPrivacyError('');
+    try {
+      if (supabase) { const { error } = await supabase.auth.signOut(); if (error) throw error; }
+      localStorage.setItem('isGuest', 'true');
+      localStorage.setItem('appLanguage', selectedLang);
+      localStorage.setItem('guestProfile', JSON.stringify({ allergies, religious_diet: religion, vegetarian_type: diet }));
+      setPrivacyDialog('guest');
+    } catch { setPrivacyError('Could not switch to device-only storage. Please try again.'); }
+    finally { setIsSaving(false); }
+  };
+
+  const deleteMyInfo = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setPrivacyError('');
+    try {
+      if (localStorage.getItem('isGuest') !== 'true') {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) throw new Error('Please sign in again before deleting your information.');
+        // Server RPC deletes scan logs and clears dietary fields and consent; the profile row remains.
+        const { error } = await supabase.rpc('delete_my_data');
+        if (error) throw new Error('Deletion could not be completed. The server deletion function may not be configured. Your information has not been confirmed deleted.');
+        const { error: signOutError } = await supabase.auth.signOut();
+        if (signOutError) throw new Error('Server data was deleted, but sign-out failed. Please log out and retry.');
+      }
+      localStorage.removeItem('guestProfile');
+      localStorage.removeItem('isGuest');
+      navigate('/', { replace: true });
+    } catch (error) { setPrivacyError(error.message || 'Could not delete your information. Please try again.'); }
+    finally { setIsSaving(false); }
   };
 
   // 로그아웃 처리 (언어 세팅 유지)
@@ -202,7 +247,7 @@ const Profile = () => {
     localStorage.removeItem('isGuest');
     localStorage.removeItem('guestProfile');
     // appLanguage는 지우지 않아 로그인 페이지나 재로그인 후에도 설정된 언어 유지
-    await supabase.auth.signOut();
+    if (supabase) await supabase.auth.signOut();
     navigate('/', { replace: true });
   };
 
@@ -252,7 +297,9 @@ const Profile = () => {
           <h1 style={headerTitle}>Dietary Profile</h1>
         </header>
 
-        <main style={mainContent}>
+        <main style={mainContent} className="expanded-profile">
+          {loadError && <div role="alert" className="profile-load-error">Could not load your profile. Reload before saving to protect your existing settings. <button onClick={() => window.location.reload()}>Reload profile</button></div>}
+          <fieldset disabled={loading || isSaving || loadError} className="profile-fields">
           {/* 0. LANGUAGE SELECTION */}
           <section style={sectionStyle}>
             <h2 style={sectionTitle}>LANGUAGE</h2>
@@ -261,13 +308,13 @@ const Profile = () => {
                 {languages.map((lang) => {
                   const isSelected = selectedLang === lang.code;
                   return (
-                    <div
+                    <button type="button" aria-pressed={isSelected}
                       key={lang.code}
                       onClick={() => handleLanguageSelect(lang.code)}
                       style={isSelected ? activeBlueLangChipStyle : langChipStyle}
                     >
                       {lang.label}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -278,20 +325,29 @@ const Profile = () => {
           <section style={sectionStyle}>
             <h2 style={sectionTitle}>ALLERGIES</h2>
             <div style={cardBox}>
-              <div style={allergyGridStyle}>
-                {allergyOptions.map((item) => {
-                  const isSelected = allergies.includes(item.value);
-                  return (
-                    <div
-                      key={item.value}
-                      onClick={(e) => handleAllergyToggle(e, item.value)}
-                      style={isSelected ? activeRedChipStyle : chipStyle}
-                    >
-                      {item.label}
-                    </div>
-                  );
-                })}
+              <div className="profile-allergen-chips">
+                {visibleAllergies.map((item) => (
+                  <button type="button" key={item.value} aria-pressed={Object.hasOwn(allergies, item.value)}
+                    className="profile-allergen-chip" onClick={(e) => handleAllergyToggle(e, item.value)}>{item.label}</button>
+                ))}
+                {legacyAllergies.map(([name]) => <button type="button" key={name} aria-pressed="true" className="profile-allergen-chip" onClick={(e) => handleAllergyToggle(e, name)}>{profileLabel(name)}</button>)}
               </div>
+              <button type="button" className="profile-more" aria-expanded={showMoreAllergies} onClick={() => setShowMoreAllergies(value => !value)}>{showMoreAllergies ? 'Show fewer allergens' : '+ More allergens (22)'}</button>
+              <p className="profile-help">Shellfish includes shrimp, crab and clams. Tree nuts includes walnuts and pine nuts.</p>
+              {selectedAllergies.length > 0 && <div className="profile-severities">
+                <h3>How severe?</h3>
+                <p className="profile-help">Choose the severity for each allergy. Mild does not mean a food is safe to eat.</p>
+                {selectedAllergies.map(([name, severity]) => (
+                  <div className="profile-severity-row" key={name}>
+                    <span>{profileLabel(name)}</span>
+                    <div role="group" aria-label={`${profileLabel(name)} severity`}>
+                      <button type="button" aria-pressed={severity === '심각'} className="profile-severe" onClick={() => setAllergies(prev => ({...prev, [name]: '심각'}))}>Severe</button>
+                      <button type="button" aria-pressed={severity === '경미'} className="profile-mild" onClick={() => setAllergies(prev => ({...prev, [name]: '경미'}))}>Mild</button>
+                    </div>
+                    {severity === 'unknown' && <small>Please select a severity</small>}
+                  </div>
+                ))}
+              </div>}
             </div>
           </section>
 
@@ -303,13 +359,13 @@ const Profile = () => {
                 {religionOptions.map((item) => {
                   const isSelected = religion === item.value;
                   return (
-                    <div
+                    <button type="button" aria-pressed={isSelected}
                       key={item.value}
                       onClick={(e) => handleReligionSelect(e, item.value)}
                       style={isSelected ? activeBlueChipStyle : chipStyle}
                     >
                       {item.label}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -324,24 +380,25 @@ const Profile = () => {
                 {dietOptions.map((item) => {
                   const isSelected = diet === item.value;
                   return (
-                    <div
+                    <button type="button" aria-pressed={isSelected}
                       key={item.value}
                       onClick={(e) => handleDietSelect(e, item.value)}
                       style={isSelected ? activeBlueChipStyle : chipStyle}
                     >
                       {item.label}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
             </div>
           </section>
 
+          </fieldset>
           <div style={actionButtonGroup}>
             <button type="button" className="dietary-card-entry" disabled={loading || isSaving} onClick={() => navigate('/profile/card', { state: { cardBackground: location } })}>Show my dietary card</button>
             <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 8px', textAlign: 'center' }}>Uses your saved profile. Save changes first to update this card.</p>
-            <div 
-              onClick={isSaving ? null : handleComplete} 
+            <button type="button" disabled={loading || isSaving || loadError}
+              onClick={handleComplete}
               style={{
                 ...saveBtnStyle,
                 opacity: isSaving ? 0.7 : 1,
@@ -349,13 +406,16 @@ const Profile = () => {
               }}
             >
               {isSaving ? 'Saving...' : 'Save Changes'}
-            </div>
+            </button>
+            <button type="button" className="privacy-cancel" onClick={() => navigate('/privacy')}>Privacy notice</button>
+            <button type="button" className="privacy-cancel" style={{ color: '#B91C1C' }} onClick={() => { setPrivacyError(''); setPrivacyDialog('delete'); }}>Delete my info</button>
             <div onClick={handleLogout} style={logoutBtnStyle}>
               Log Out
             </div>
           </div>
         </main>
 
+        {privacyDialog && <PrivacyDialog kind={privacyDialog} busy={isSaving} error={privacyError} onClose={() => setPrivacyDialog(null)} onAgree={() => handleComplete(true)} onDecline={privacyDialog === 'guest' ? () => navigate('/') : saveOnDevice} onDelete={deleteMyInfo} />}
         <ProfileBottomNav />
       </div>
     </div>
@@ -458,16 +518,14 @@ const mainContent = { flex: 1, padding: '20px', display: 'flex', flexDirection: 
 const sectionStyle = { display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' };
 const sectionTitle = { fontSize: 12, fontWeight: 700, color: '#475569', margin: '0 0 2px 2px', letterSpacing: '0.3px',textAlign: 'left' };
 const cardBox = { width: '100%', background: '#FFFFFF', borderRadius: 20, padding: '14px', border: '1px solid #F1F5F9', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', boxSizing: 'border-box' };
-const allergyGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, width: '100%', boxSizing: 'border-box' };
 const chipRowStyle = { display: 'flex', gap: 8, flexWrap: 'wrap',justifyContent: 'flex-start'};
 const langRowStyle = { display: 'flex', gap: 6, flexWrap: 'nowrap', justifyContent: 'space-between' };
 const langChipStyle = { flex: 1, padding: '8px 0', borderRadius: 24, border: '2px solid #E2E8F0', background: '#FFFFFF', color: '#475569', fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', outline: 'none', whiteSpace: 'nowrap' };
 const activeBlueLangChipStyle = { flex: 1, padding: '8px 0', borderRadius: 24, border: '2px solid #1D5BB4', background: '#EFF6FF', color: '#1D5BB4', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', outline: 'none', whiteSpace: 'nowrap' };
 const chipStyle = { padding: '8px 16px', borderRadius: 20, border: '2px solid #E2E8F0', background: '#FFFFFF', color: '#64748B', fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap', boxSizing: 'border-box' };
-const activeRedChipStyle = { width: '100%',minWidth: 0, padding: '8px 0px', borderRadius: 20, border: '2px solid #EF4444', background: '#FEF2F2', color: '#DC2626', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', outline: 'none' };
 const activeBlueChipStyle = { padding: '8px 16px', borderRadius: 20, border: '2px solid #1D5BB4', background: '#EFF6FF', color: '#1D5BB4', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', outline: 'none' };
 const actionButtonGroup = { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12 };
-const saveBtnStyle = { width: '100%', height: 52, background: '#1D5BB4', color: '#FFFFFF', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(29, 91, 180, 0.25)' };
+const saveBtnStyle = { border: 'none', fontFamily: 'inherit', width: '100%', height: 52, background: '#1D5BB4', color: '#FFFFFF', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(29, 91, 180, 0.25)' };
 const logoutBtnStyle = { width: '100%', height: 44, background: '#F1F5F9', color: '#64748B', borderRadius: 14, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const bottomNavStyle = { marginTop: 'auto', height: 64, background: '#FFFFFF', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0 8px' };
 const navItem = (isActive) => ({ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: isActive ? '#1D5BB4' : '#94A3B8', fontSize: 11, fontWeight: isActive ? 700 : 500, cursor: 'pointer', padding: '4px 8px' });

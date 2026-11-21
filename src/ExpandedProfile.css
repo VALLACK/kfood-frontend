@@ -1,0 +1,20 @@
+.profile-fields { display: flex; flex-direction: column; gap: 20px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.profile-fields:disabled { opacity: .65; }
+.expanded-profile button { font-family: inherit; box-sizing: border-box; }
+.expanded-profile button:focus-visible { outline: 3px solid #93c5fd !important; outline-offset: 2px; }
+.profile-allergen-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.profile-allergen-chip { border: 1px solid #e2e8f0; border-radius: 24px; background: white; color: #475569; padding: 9px 12px; min-height: 38px; font-size: 12px; cursor: pointer; }
+.profile-allergen-chip[aria-pressed="true"] { background: #fef2f2; border-color: #dc2626; color: #b91c1c; font-weight: 700; }
+.profile-more { padding: 8px 12px; margin-top: 12px; background: white; border: 1px solid #31599c; color: #31599c; border-radius: 20px; font-size: 12px; cursor: pointer; }
+.profile-help { font-size: 12px; line-height: 1.5; color: #64748b; margin: 12px 0 0; text-align: left; }
+.profile-severities { background: #f8fafc; border-radius: 14px; padding: 12px; margin-top: 14px; }
+.profile-severities h3 { font-size: 13px; margin: 0; text-align: left; }
+.profile-severities .profile-help { margin-top: 6px; }
+.profile-severity-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 12px; text-align: left; }
+.profile-severity-row > span { flex: 1; overflow-wrap: anywhere; font-weight: 700; }
+.profile-severity-row [role="group"] { display: flex; gap: 6px; }
+.profile-severity-row button { padding: 8px 10px; min-height: 36px; border: 1px solid #e2e8f0; background: white; color: #64748b; border-radius: 20px; font-size: 12px; cursor: pointer; }
+.profile-severity-row .profile-severe[aria-pressed="true"] { color: white; background: #b91c1c; border-color: #b91c1c; }
+.profile-severity-row .profile-mild[aria-pressed="true"] { color: white; background: #a16207; border-color: #a16207; }
+.profile-severity-row small { flex-basis: 100%; color: #92400e; }
+.profile-load-error { font-size: 13px; line-height: 1.5; color: #b91c1c; background: #fef2f2; padding: 12px; border-radius: 12px; }

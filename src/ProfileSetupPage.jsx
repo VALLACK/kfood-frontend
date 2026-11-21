@@ -33,8 +33,8 @@ export default function ProfileSetupPage() {
           <p className="profile-setup-intro">We check every dish against your profile. It takes about 30 seconds.</p>
           <ul className="profile-setup-options">
             <li><span className="profile-setup-option-icon" aria-hidden="true">!</span><div><h2>Allergies</h2><p>Shellfish, peanuts, eggs, wheat and more</p></div></li>
-            <li><span className="profile-setup-option-icon" aria-hidden="true">◇</span><div><h2>Religious diet</h2><p>Halal · Kosher</p></div></li>
-            <li><span className="profile-setup-option-icon" aria-hidden="true">♧</span><div><h2>Diet preference</h2><p>Vegan · Vegetarian</p></div></li>
+            <li><span className="profile-setup-option-icon" aria-hidden="true">◇</span><div><h2>Religious diet</h2><p>Halal · Kosher · Hindu</p></div></li>
+            <li><span className="profile-setup-option-icon" aria-hidden="true">♧</span><div><h2>Diet preference</h2><p>Vegan · Vegetarian · Pescatarian · Lacto · Ovo</p></div></li>
           </ul>
           <div className="profile-setup-warning"><strong>Without a profile, dishes may look SAFE</strong><p>Results are only personalized after you set your profile. SAFE does not guarantee that a dish is safe for you.</p></div>
           <div className="profile-setup-actions">

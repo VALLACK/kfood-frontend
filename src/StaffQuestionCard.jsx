@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import StaffVoiceAnswer from './StaffVoiceAnswer';
+import { validAnalysisResults } from './scanFailure';
+import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { supabase } from './supabaseClient';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 async function authHeader() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = supabase ? (await supabase.auth.getSession()).data.session : null;
   return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
@@ -35,9 +37,18 @@ function speakKo(text) {
 export default function StaffQuestionCard({ item, question, onUpdated }) {
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState('');
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const busy = useRef(false);
+  const active = useRef(true);
+  const request = useRef(null);
+  useEffect(() => { active.current = true; return () => { active.current = false; request.current?.abort(); }; }, []);
   const isVariant = question.kind === 'variant';
 
-  const answer = async (value) => {
+  const answer = async (value, inputType = 'text') => {
+    if (busy.current) return false;
+    busy.current = true;
+    const controller = new AbortController();
+    request.current = controller;
     setSending(true);
     setFailed('');
     try {
@@ -50,16 +61,22 @@ export default function StaffQuestionCard({ item, question, onUpdated }) {
           options: question.options || [],
         },
         staff_answer: value,
-        input_type: 'text',
+        input_type: inputType,
         // 게스트는 로그인 토큰이 없으므로 /analyze와 똑같이 프로필을 직접 보낸다.
         // 빠지면 서버가 '제약 없는 사람' 기준으로 재판정해서 '예'를 눌러도 SAFE가 된다.
         ...guestProfileBody(),
-      }, { headers: await authHeader(), timeout: 60000 });
+      }, { headers: await authHeader(), timeout: 60000, signal: controller.signal });
+      if (!active.current || controller.signal.aborted) return false;
+      if (!validAnalysisResults([res.data?.result])) throw new Error('Invalid confirmation result');
+      if (res.data.verdict === 'unknown') { setFailed('The answer was unclear. Please ask the staff again; no confirmation was made.'); return false; }
       onUpdated(res.data.result);
+      return true;
     } catch {
-      setFailed('Could not apply the answer. Please try again.');
+      if (active.current && !controller.signal.aborted) setFailed('Could not apply the answer. Please try again.');
+      return false;
     } finally {
-      setSending(false);
+      busy.current = false;
+      if (active.current) setSending(false);
     }
   };
 
@@ -68,20 +85,21 @@ export default function StaffQuestionCard({ item, question, onUpdated }) {
       <div style={staffHint}>Show this to the staff</div>
       <div style={staffKo}>{question.ko}</div>
       <div style={staffTranslated}>{question.translated}</div>
-      <button style={ttsBtn} onClick={() => speakKo(question.ko)}>🔊 Read aloud in Korean</button>
+      <button disabled={sending || voiceBusy} style={ttsBtn} onClick={() => speakKo(question.ko)}>🔊 Read aloud in Korean</button>
       <div style={answerRow}>
         {isVariant
           ? (question.options || []).map((opt) => (
-              <button key={opt} disabled={sending} style={answerBtn('#1D5BB4')} onClick={() => answer(opt)}>{opt}</button>
+              <button key={opt} disabled={sending || voiceBusy} style={answerBtn('#1D5BB4')} onClick={() => answer(opt)}>{opt}</button>
             ))
           : (
             <>
-              <button disabled={sending} style={answerBtn('#DC2626')} onClick={() => answer('예')}>Yes · 예</button>
-              <button disabled={sending} style={answerBtn('#16A34A')} onClick={() => answer('아니요')}>No · 아니요</button>
+              <button disabled={sending || voiceBusy} style={answerBtn('#DC2626')} onClick={() => answer('예')}>Yes · 예</button>
+              <button disabled={sending || voiceBusy} style={answerBtn('#16A34A')} onClick={() => answer('아니요')}>No · 아니요</button>
             </>
           )}
       </div>
-      {failed && <div style={staffError}>⚠️ {failed}</div>}
+      <StaffVoiceAnswer item={item} question={question} disabled={sending} onConfirm={answer} onBusy={setVoiceBusy} />
+      {failed && <div role="alert" style={staffError}>⚠️ {failed}</div>}
     </div>
   );
 }

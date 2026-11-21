@@ -1,7 +1,9 @@
+import { allergyEntries, profileLabel } from './dietaryProfile';
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import Login from './Login';
+import PrivacyNotice from './PrivacyScreens';
 import Profile from './Profile';
 import ProfileSetupPage from './ProfileSetupPage';
 import ProfileCardPage from './ProfileCardPage';
@@ -96,7 +98,7 @@ function Home() {
     vegan: 'Vegan',
   };
 
-  const getLabel = (value) => LABEL_MAP[value] || null;
+  const getLabel = (value) => LABEL_MAP[value] || profileLabel(value);
 
   return (
     <div style={homeContainer}>
@@ -180,15 +182,11 @@ function Home() {
                 ) : (
                   <>
                     {/* 알레르기 태그 */}
-                    {profile?.allergies && profile.allergies.length > 0 && 
-                      profile.allergies
-                        .filter((allergyKey) => getLabel(allergyKey) !== null)
-                        .map((allergyKey) => (
-                          <span key={allergyKey} style={redTag}>
-                            No {getLabel(allergyKey)}
-                          </span>
-                        ))
-                    }
+                    {allergyEntries(profile?.allergies).map(([allergyKey, severity]) => (
+                      <span key={allergyKey} style={redTag}>
+                        No {getLabel(allergyKey)}{severity === '심각' ? ' · Severe' : severity === '경미' ? ' · Mild' : ''}
+                      </span>
+                    ))}
 
                     {/* 종교적 식단 태그 */}
                     {profile?.religious_diet && (
@@ -205,7 +203,7 @@ function Home() {
                     )}
 
                     {/* 설정 데이터가 없을 경우 */}
-                    {(!profile?.allergies?.length && !profile?.religious_diet && !profile?.vegetarian_type) && (
+                    {(!allergyEntries(profile?.allergies).length && !profile?.religious_diet && !profile?.vegetarian_type) && (
                       <span style={{ fontSize: 12, color: '#94A3B8' }}>
                         No filter settings found. Tap Edit to set up.
                       </span>
@@ -341,6 +339,7 @@ function AppRoutes() {
           <Route path="/" element={<Login />} />
           <Route path="/home" element={<Home />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/privacy" element={<PrivacyNotice />} />
           <Route path="/profile/setup" element={<ProfileSetupPage />} />
           <Route path="/profile/card" element={<ProfileCardPage />} />
           <Route path="/scan" element={<ScanPage />} />
