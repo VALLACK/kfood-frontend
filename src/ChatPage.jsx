@@ -121,8 +121,8 @@ export default function ChatPage() {
   };
 
   return (
-    <div style={pageOuter}>
-      <div style={mobileCard}>
+    <div className="app-shell">
+      <div className="app-card app-card--fixed">
         <header style={headerBar}>
           <button onClick={() => navigate(-1)} style={backBtn} aria-label="Back">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0F172A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -300,31 +300,6 @@ function BottomNav() {
 
 /* ==================== Inline Styles ==================== */
 
-const pageOuter = {
-  minHeight: '100vh',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  background: '#333333',
-  padding: '16px',
-  boxSizing: 'border-box',
-};
-
-const mobileCard = {
-  width: '100%',
-  maxWidth: 390,
-  minHeight: 780,
-  maxHeight: 850,
-  background: '#F8FAFC',
-  borderRadius: 36,
-  display: 'flex',
-  flexDirection: 'column',
-  boxSizing: 'border-box',
-  position: 'relative',
-  overflow: 'hidden',
-  boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-};
-
 const headerBar = {
   display: 'flex',
   alignItems: 'flex-start',
@@ -371,6 +346,7 @@ const headerSubtitle = {
 
 const messageScroll = {
   flex: 1,
+  minHeight: 0,
   overflowY: 'auto',
   padding: '16px 20px',
   display: 'flex',

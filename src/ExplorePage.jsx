@@ -107,8 +107,8 @@ export default function ExplorePage() {
   const isOverTotal = total > restaurants.length && restaurants.length > 0;
 
   return (
-    <div style={pageContainer}>
-      <div style={mobileCard}>
+    <div className="app-shell">
+      <div className="app-card app-card--flow">
 
         {/* 상단 헤더 */}
         <header style={headerStyle}>
@@ -202,7 +202,8 @@ export default function ExplorePage() {
             {!isGuest && (
               <div>
                 <h2 style={listTitle}>
-                  Top {restaurants.length} restaurants matching your dietary needs                </h2>
+                  Top {restaurants.length} restaurants matching your dietary needs
+                </h2>
                 <p style={listSubtitle}>
                   Selected by edible menu availability, then ranked by Google rating.
                 </p>
@@ -281,8 +282,6 @@ export default function ExplorePage() {
                 </div>
               ))}
 
-              
-
               {/* total > 20 안내 배너 */}
               {isOverTotal && (
                 <div style={overTotalNotice}>
@@ -290,8 +289,6 @@ export default function ExplorePage() {
                   Narrow your search by keyword or area.
                 </div>
               )}
-
-        
             </div>
           </>
           )}
@@ -301,7 +298,6 @@ export default function ExplorePage() {
             {disclaimer && <div>{disclaimer}</div>}
           </div>
 
-
         </main>
       </div>
     </div>
@@ -309,30 +305,6 @@ export default function ExplorePage() {
 }
 
 /* 스타일 정의 */
-const pageContainer = {
-  minHeight: '100vh',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  background: '#333333',
-  padding: '16px',
-  boxSizing: 'border-box',
-};
-
-const mobileCard = {
-  width: '100%',
-  maxWidth: 390,
-  minHeight: 780,
-  background: '#F8FAFC',
-  borderRadius: 36,
-  display: 'flex',
-  flexDirection: 'column',
-  boxSizing: 'border-box',
-  position: 'relative',
-  overflow: 'hidden',
-  boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-};
-
 const headerStyle = {
   padding: '40px 20px 12px',
   display: 'flex',
@@ -369,7 +341,6 @@ const mainContent = {
   display: 'flex',
   flexDirection: 'column',
   gap: 12,
-  overflowY: 'auto',
 };
 
 const noticeCard = {
@@ -603,6 +574,7 @@ const footerText = {
   padding: '12px 0 16px',
   lineHeight: 1.3,
 };
+
 const listTitle = {
   fontSize: 14,
   fontWeight: 800,
