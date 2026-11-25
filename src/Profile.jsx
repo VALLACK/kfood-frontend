@@ -253,8 +253,8 @@ const Profile = () => {
 
   if (loading) {
     return (
-      <div style={pageContainer}>
-        <div style={mobileCard}>
+      <div className="app-shell" style={{ userSelect: 'none' }}>
+        <div className="app-card app-card--fixed">
           <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Loading...</div>
         </div>
       </div>
@@ -262,7 +262,7 @@ const Profile = () => {
   }
 
   return (
-    <div style={pageContainer}>
+    <div className="app-shell" style={{ userSelect: 'none' }}>
       <style>{`
         * { -webkit-tap-highlight-color: transparent !important; }
         div:focus, button:focus { outline: none !important; box-shadow: none !important; }
@@ -273,7 +273,7 @@ const Profile = () => {
         }
       `}</style>
 
-      <div style={mobileCard}>
+      <div className="app-card app-card--fixed">
         {/* 커스텀 토스트 UI */}
         {toast.show && (
           <div
@@ -491,9 +491,6 @@ function ProfileBottomNav() {
 }
 
 /* Inline Styles */
-const pageContainer = { minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#333333', padding: '16px', boxSizing: 'border-box', userSelect: 'none' };
-const mobileCard = { width: '100%', maxWidth: 390, minHeight: 780, background: '#F8FAFC', borderRadius: 36, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', position: 'relative', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' };
-
 const toastContainerStyle = {
   position: 'absolute',
   top: 20,
@@ -511,14 +508,14 @@ const toastContainerStyle = {
   pointerEvents: 'none',
 };
 
-const headerStyle = { display: 'flex', alignItems: 'center', padding: '48px 20px 16px', background: '#FFFFFF', gap: 12 };
+const headerStyle = { display: 'flex', alignItems: 'center', padding: '48px 20px 16px', background: '#FFFFFF', gap: 12, flexShrink: 0 };
 const backButton = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }; 
 const headerTitle = { fontSize: 19, fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.3px' }; 
-const mainContent = { flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' };
+const mainContent = { flex: 1, minHeight: 0, padding: '20px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' };
 const sectionStyle = { display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' };
-const sectionTitle = { fontSize: 12, fontWeight: 700, color: '#475569', margin: '0 0 2px 2px', letterSpacing: '0.3px',textAlign: 'left' };
+const sectionTitle = { fontSize: 12, fontWeight: 700, color: '#475569', margin: '0 0 2px 2px', letterSpacing: '0.3px', textAlign: 'left' };
 const cardBox = { width: '100%', background: '#FFFFFF', borderRadius: 20, padding: '14px', border: '1px solid #F1F5F9', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', boxSizing: 'border-box' };
-const chipRowStyle = { display: 'flex', gap: 8, flexWrap: 'wrap',justifyContent: 'flex-start'};
+const chipRowStyle = { display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-start' };
 const langRowStyle = { display: 'flex', gap: 6, flexWrap: 'nowrap', justifyContent: 'space-between' };
 const langChipStyle = { flex: 1, padding: '8px 0', borderRadius: 24, border: '2px solid #E2E8F0', background: '#FFFFFF', color: '#475569', fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', outline: 'none', whiteSpace: 'nowrap' };
 const activeBlueLangChipStyle = { flex: 1, padding: '8px 0', borderRadius: 24, border: '2px solid #1D5BB4', background: '#EFF6FF', color: '#1D5BB4', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', outline: 'none', whiteSpace: 'nowrap' };
@@ -527,7 +524,7 @@ const activeBlueChipStyle = { padding: '8px 16px', borderRadius: 20, border: '2p
 const actionButtonGroup = { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12 };
 const saveBtnStyle = { border: 'none', fontFamily: 'inherit', width: '100%', height: 52, background: '#1D5BB4', color: '#FFFFFF', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(29, 91, 180, 0.25)' };
 const logoutBtnStyle = { width: '100%', height: 44, background: '#F1F5F9', color: '#64748B', borderRadius: 14, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
-const bottomNavStyle = { marginTop: 'auto', height: 64, background: '#FFFFFF', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0 8px' };
+const bottomNavStyle = { marginTop: 'auto', height: 64, background: '#FFFFFF', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0 8px', flexShrink: 0 };
 const navItem = (isActive) => ({ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: isActive ? '#1D5BB4' : '#94A3B8', fontSize: 11, fontWeight: isActive ? 700 : 500, cursor: 'pointer', padding: '4px 8px' });
 const navIcon = { width: 22, height: 22 };
 

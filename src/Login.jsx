@@ -90,9 +90,9 @@ function Login() {
 
   if (loading) {
     return (
-      <div style={loginContainer}>
-        <div style={mobileCard}>
-          <p style={{ color: '#6B7280', fontSize: 14 }}>Checking authentication...</p>
+      <div className="app-shell">
+        <div className="app-card app-card--flow" style={loginCardOverrides}>
+          <p style={{ color: '#6B7280', fontSize: 14, margin: 'auto 0' }}>Checking authentication...</p>
         </div>
       </div>
     );
@@ -101,8 +101,8 @@ function Login() {
   if (showOnboarding) return <Onboarding onGoogleSignIn={handleLogin} onGuestContinue={handleGuestLogin} />;
 
   return (
-    <div style={loginContainer}>
-      <div style={mobileCard}>
+    <div className="app-shell">
+      <div className="app-card app-card--flow" style={loginCardOverrides}>
         <div style={cardContent}>
           <div style={iconWrapper}>
             <svg style={shieldIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -152,30 +152,11 @@ function Login() {
 export default Login;
 
 /* Inline Styles */
-const loginContainer = {
-  minHeight: '100vh',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  background: '#333333',
-  padding: '16px',
-  boxSizing: 'border-box',
-};
-
-const mobileCard = {
-  width: '100%',
-  maxWidth: 390,
-  minHeight: 780,
+const loginCardOverrides = {
   background: '#FFFFFF',
-  borderRadius: 36,
   padding: '32px 24px 24px',
-  display: 'flex',
-  flexDirection: 'column',
   alignItems: 'center',
-  justifyContent: 'space-between', // 상하 중앙 밸런스 배치
-  boxSizing: 'border-box',
-  position: 'relative',
-  boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+  justifyContent: 'space-between',
 };
 
 /* 3. 전체 요소를 수직 중앙으로 잡아주는 메인 그룹 */

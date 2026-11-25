@@ -184,8 +184,8 @@ export default function ScanPage() {
   </>;
 
   return (
-    <div style={pageOuter}>
-      <div style={mobileCard}>
+    <div className="app-shell">
+      <div className="app-card app-card--fixed" style={{ background: '#0B0B0F' }}>
         {/* 상단 바 */}
         <div style={topBar}>
           <button onClick={handleClose} style={iconBtn} aria-label="Close">
@@ -230,8 +230,6 @@ export default function ScanPage() {
               <div style={scanningText}>{status === 'preparing' ? 'Preparing photo...' : 'Reading menu items...'}</div>
             </div>
           )}
-
-
         </div>
 
         {!status && <div style={hintText}>Point at the menu and tap to capture</div>}
@@ -277,35 +275,12 @@ export default function ScanPage() {
 
 /* ==================== Inline Styles ==================== */
 
-const pageOuter = {
-  minHeight: '100vh',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  background: '#333333',
-  padding: '16px',
-  boxSizing: 'border-box',
-};
-
-const mobileCard = {
-  width: '100%',
-  maxWidth: 390,
-  minHeight: 780,
-  background: '#0B0B0F',
-  borderRadius: 36,
-  display: 'flex',
-  flexDirection: 'column',
-  boxSizing: 'border-box',
-  position: 'relative',
-  overflow: 'hidden',
-  boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-};
-
 const topBar = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '20px 20px 12px',
+  padding: '16px 20px 10px',
+  flexShrink: 0,
 };
 
 const iconBtn = {
@@ -328,6 +303,7 @@ const topTitle = {
 
 const viewfinderWrap = {
   flex: 1,
+  minHeight: 0,
   margin: '4px 20px 0',
   borderRadius: 20,
   background: '#000',
@@ -398,19 +374,20 @@ const scanningText = {
   fontWeight: 600,
 };
 
-
 const hintText = {
   textAlign: 'center',
   color: 'rgba(255,255,255,0.6)',
   fontSize: 13,
-  padding: '14px 20px 0',
+  padding: '10px 20px 0',
+  flexShrink: 0,
 };
 
 const bottomBar = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '18px 32px 10px',
+  padding: '12px 32px 6px',
+  flexShrink: 0,
 };
 
 const sideIconBtn = {
@@ -432,8 +409,8 @@ const sideIconBtnDisabled = {
 };
 
 const captureBtn = {
-  width: 72,
-  height: 72,
+  width: 68,
+  height: 68,
   borderRadius: '50%',
   border: '4px solid #fff',
   background: 'transparent',
@@ -444,8 +421,8 @@ const captureBtn = {
 };
 
 const captureBtnInner = {
-  width: 56,
-  height: 56,
+  width: 52,
+  height: 52,
   borderRadius: '50%',
   background: '#fff',
 };
@@ -455,5 +432,6 @@ const dragHandle = {
   height: 4,
   borderRadius: 2,
   background: 'rgba(255,255,255,0.3)',
-  margin: '10px auto 16px',
+  margin: '8px auto 12px',
+  flexShrink: 0,
 };

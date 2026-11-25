@@ -85,12 +85,10 @@ export default function RestaurantDetailPage() {
     });
   };
 
-
-
   if (loading) {
     return (
-      <div style={pageContainer}>
-        <div style={mobileCard}>
+      <div className="app-shell">
+        <div className="app-card app-card--flow">
           <div style={statusText}>Loading restaurant detail...</div>
         </div>
       </div>
@@ -99,8 +97,8 @@ export default function RestaurantDetailPage() {
 
   if (error || !data) {
     return (
-      <div style={pageContainer}>
-        <div style={mobileCard}>
+      <div className="app-shell">
+        <div className="app-card app-card--flow">
           <div style={errorContainer}>
             <div style={statusText}>{error || 'Restaurant not found.'}</div>
             <button onClick={() => navigate(-1)} style={errorBackBtn}>
@@ -127,8 +125,8 @@ export default function RestaurantDetailPage() {
   ).length;
 
   return (
-    <div style={pageContainer}>
-      <div style={mobileCard}>
+    <div className="app-shell">
+      <div className="app-card app-card--flow">
         {/* 상단 헤더 */}
         <header style={headerStyle}>
           <button onClick={() => navigate(-1)} style={backBtn}>
@@ -196,7 +194,6 @@ export default function RestaurantDetailPage() {
             MENUS
           </div>
 
-          
           {/* 4. 메뉴 리스트 카드 */}
           <div style={menuGroupContainer}>
             {data.results?.map((item, index) => (
@@ -210,8 +207,6 @@ export default function RestaurantDetailPage() {
                       : '1px solid #F1F5F9',
                 }}
               >
-                
-
                 <ResultCard
                   item={item}
                   onUpdated={(updated) => handleUpdated(index, updated)}
@@ -227,7 +222,6 @@ export default function RestaurantDetailPage() {
             )}
           </div>
 
-
           {/* 하단 면책 조항 */}
           {data.disclaimer && (
             <div style={footerDisclaimer}>
@@ -241,16 +235,13 @@ export default function RestaurantDetailPage() {
 }
 
 /* 🎨 스타일 정의 */
-const pageContainer = { minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#333333', padding: '16px', boxSizing: 'border-box' };
-const mobileCard = { width: '100%', maxWidth: 390, minHeight: 780, background: '#F8FAFC', borderRadius: 36, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', position: 'relative', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' };
-
 const headerStyle = { padding: '24px 20px 12px', display: 'flex', alignItems: 'center', gap: 12, background: '#F8FAFC' };
 const backBtn = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', flexShrink: 0 };
 const headerTextGroup = { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left' };
 const headerTitle = { fontSize: 18, fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.3px', textAlign: 'left' };
 const headerSubTitle = { fontSize: 11, color: '#94A3B8', margin: '2px 0 0 0', textAlign: 'left' };
 
-const mainContent = { flex: 1, padding: '0 16px 20px', display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto' };
+const mainContent = { flex: 1, padding: '0 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 };
 const statusText = { padding: 20, textAlign: 'center', color: '#94A3B8', fontSize: 12 };
 
 const errorContainer = { flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: 20 };

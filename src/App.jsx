@@ -101,8 +101,8 @@ function Home() {
   const getLabel = (value) => LABEL_MAP[value] || profileLabel(value);
 
   return (
-    <div style={homeContainer}>
-      <div style={mobileCard}>
+    <div className="app-shell">
+      <div className="app-card app-card--fixed">
         {/* 상단 헤더 */}
         <header style={headerStyle}>
           <div style={logoWrapper}>
@@ -365,15 +365,13 @@ function App() {
 export default App;
 
 /* Inline Styles */
-const homeContainer = { minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#333333', padding: '16px', boxSizing: 'border-box' };
-const mobileCard = { width: '100%', maxWidth: 390, minHeight: 780, background: '#F8FAFC', borderRadius: 36, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', position: 'relative', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' };
-const headerStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '48px 24px 16px', background: '#F8FAFC' };
+const headerStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '48px 24px 16px', background: '#F8FAFC', flexShrink: 0 };
 const logoWrapper = { display: 'flex', alignItems: 'center', gap: 10 };
 const shieldBadge = { width: 32, height: 32, borderRadius: 10, background: '#1D5BB4', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const shieldIcon = { width: 18, height: 18, color: '#FFFFFF' };
 const logoText = { fontSize: 18, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.3px' };
 const avatarImg = { width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' };
-const mainContent = { flex: 1, padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: 16 };
+const mainContent = { flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: 16 };
 const scanCard = { background: '#FFFFFF', borderRadius: 24, padding: '24px 20px 20px', textAlign: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center' };
 const scanTitle = { fontSize: 22, fontWeight: 800, color: '#0F172A', margin: '0 0 8px 0', letterSpacing: '-0.3px' };
 const scanDesc = { fontSize: 13, color: '#64748B', lineHeight: 1.45, margin: '0 0 20px 0', maxWidth: 280 };
@@ -442,6 +440,6 @@ const filterCardDesc = { fontSize: 12, color: '#64748B', margin: '0 0 12px 0', l
 const tagRow = { display: 'flex', gap: 8, flexWrap: 'wrap' };
 const redTag = { padding: '6px 14px', borderRadius: 20, border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#DC2626', fontSize: 13, fontWeight: 600 };
 const blueTag = { padding: '6px 14px', borderRadius: 20, border: '1px solid #1D5BB4', background: '#EFF6FF', color: '#1D5BB4', fontSize: 13, fontWeight: 600 };
-const bottomNavStyle = { marginTop: 'auto', height: 64, background: '#FFFFFF', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0 8px' };
+const bottomNavStyle = { marginTop: 'auto', height: 64, background: '#FFFFFF', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0 8px', flexShrink: 0 };
 const navItem = (isActive) => ({ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: isActive ? '#1D5BB4' : '#94A3B8', fontSize: 11, fontWeight: isActive ? 700 : 500, cursor: 'pointer', padding: '4px 8px' });
 const navIcon = { width: 22, height: 22 };

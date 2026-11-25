@@ -166,10 +166,8 @@ export default function HistoryPage() {
                 price: item.price || (Array.isArray(item.prices) ? item.prices[0] : null),
                 level,
                 reasonText,
-                staffQuestionsCount: Array.isArray(item.staff_questions)
-                  ? item.staff_questions.length
-                  : item.staff_question
-                  ? 1
+                staffQuestionsCount: Array.isArray(item.risk?.staff_questions)
+                  ? item.risk.staff_questions.length
                   : 0,
                 rawItem: item,
               };
@@ -323,8 +321,8 @@ export default function HistoryPage() {
     const profileChanged = isProfileChanged(selectedScan);
 
     return (
-      <div style={pageOuter}>
-        <div style={mobileCard}>
+      <div className="app-shell">
+        <div className="app-card app-card--fixed">
           {/* 상세 상단 헤더 */}
           <header style={headerBar}>
             <button
@@ -457,8 +455,8 @@ export default function HistoryPage() {
      SCR-14-1: 기록 목록 화면 (기본 뷰)
   ========================================================= */
   return (
-    <div style={pageOuter}>
-      <div style={mobileCard}>
+    <div className="app-shell">
+      <div className="app-card app-card--fixed">
         <header style={headerBar}>
           <button
             onClick={() => navigate(-1)}
@@ -669,32 +667,6 @@ function BottomNav() {
 }
 
 /* ==================== Inline Styles ==================== */
-
-const pageOuter = {
-  minHeight: '100vh',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  background: '#333333',
-  padding: '16px',
-  boxSizing: 'border-box',
-};
-
-const mobileCard = {
-  width: '100%',
-  maxWidth: 390,
-  height: 'calc(100vh - 32px)',
-  minHeight: 680,
-  maxHeight: 844,
-  background: '#F8FAFC',
-  borderRadius: 36,
-  display: 'flex',
-  flexDirection: 'column',
-  boxSizing: 'border-box',
-  position: 'relative',
-  overflow: 'hidden',
-  boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-};
 
 const headerBar = {
   display: 'flex',
