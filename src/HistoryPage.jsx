@@ -322,7 +322,7 @@ export default function HistoryPage() {
 
     return (
       <div className="app-shell">
-        <div className="app-card app-card--fixed">
+        <div className="app-card app-card--fixed app-card--history">
           {/* 상세 상단 헤더 */}
           <header style={headerBar}>
             <button
@@ -456,7 +456,7 @@ export default function HistoryPage() {
   ========================================================= */
   return (
     <div className="app-shell">
-      <div className="app-card app-card--fixed">
+      <div className="app-card app-card--fixed app-card--history">
         <header style={headerBar}>
           <button
             onClick={() => navigate(-1)}
