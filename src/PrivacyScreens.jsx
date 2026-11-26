@@ -46,12 +46,12 @@ export default function PrivacyNotice() {
     <section><h2>How long we keep it</h2><p>Saved profiles and scan history remain until deleted. Guest profiles are stored in this browser until you clear them or log out.</p></section>
     <section><h2>Where it is processed</h2><ul>
       <li>Profile and history storage, sign-in: Supabase (Seoul, Korea)</li>
-      <li>Dish judging server: Render (Singapore). Your profile is checked by app rules here and is not stored.</li>
-      <li>Menu reading, staff voice and chat questions: Groq AI (USA), with zero data retention (not stored)</li>
+      <li>Dish judging server: Render (Singapore). It checks dishes against your profile with app rules.</li>
+      <li>Menu photos, dish analysis, staff voice and chat questions are sent to Groq AI (USA). Chat also sends the dish's analysis result, which can show ingredients matching your allergies.</li>
       <li>Web app: Vercel (Seoul, Korea)</li>
-    </ul></section>
-    <section><h2>Menu photos</h2><p>Sent to Groq AI only to read the menu. Not stored by the app or by Groq.</p></section>
+    </ul><p>The 22 supported allergy types are checked by app rules during standard dish judging. Custom allergies that cannot be matched to these types may be sent to Groq AI for additional checks.</p><p>With organization-wide Zero Data Retention (ZDR) enabled for our Groq organization, Groq does not retain the inputs and outputs sent for processing. Usage metadata is still retained and does not include these inputs or outputs.</p></section>
+    <section><h2>Menu photos</h2><p>Sent to Groq AI only to read the menu. Not stored by the app. Groq does not retain these photos under our current organization-wide ZDR setting.</p></section>
     <section><h2>Your rights</h2><p>View and edit your profile at any time. Use Profile → Delete my info to request deletion and withdraw consent. Declining new consent does not remove existing server data.</p></section>
-    <p className="privacy-muted">Contact details will be added after the team confirms the service contact.</p><Link to="/profile">Back to Profile</Link>
+    <p className="privacy-muted">Contact: <a href="mailto:nam20913@pukyong.ac.kr">nam20913@pukyong.ac.kr</a></p><Link to="/profile">Back to Profile</Link>
   </main></div>;
 }
