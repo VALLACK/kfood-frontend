@@ -1,6 +1,6 @@
 import { allergyEntries, profileLabel } from './dietaryProfile';
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import Login from './Login';
 import PrivacyNotice from './PrivacyScreens';
@@ -346,7 +346,7 @@ function AppRoutes() {
           <Route path="/menu-review" element={<MenuReviewPage />} />
           <Route path="/result" element={<ResultPage />} />
           <Route path="/history" element={<MemberFeature feature="History"><HistoryPage /></MemberFeature>} />
-          <Route path="/chat" element={<MemberFeature feature="Chat"><ChatPage /></MemberFeature>} />
+          <Route path="/chat" element={SHOW_CHAT_TAB ? <MemberFeature feature="Chat"><ChatPage /></MemberFeature> : <Navigate to="/home" replace />} />
 
           <Route path="/explore" element={<ExplorePage />} />
           <Route path="/restaurant/:id" element={<RestaurantDetailPage />} />
